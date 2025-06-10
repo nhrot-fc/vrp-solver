@@ -164,7 +164,7 @@ public class Main extends Application {
 
     private void createAndAddRandomBlockages(Environment environment, LocalDateTime simulationStartTime) {
         Random random = new Random(123);
-        int numberOfBlockages = 2 + random.nextInt(3); // Generar entre 2 y 4 bloqueos
+        int numberOfBlockages = 20;
 
         for (int i = 1; i <= numberOfBlockages; i++) {
             List<Position> blockagePoints = new ArrayList<>();
@@ -229,7 +229,7 @@ public class Main extends Application {
         int maxX = GRID_WIDTH - 3;
         int maxY = GRID_HEIGHT - 3;
 
-        for (int i = 1; i <= 150; i++) {
+        for (int i = 1; i <= 10; i++) {
             String orderId = String.format("ORD-%03d", i);
             int posX = 2 + random.nextInt(maxX);
             int posY = 2 + random.nextInt(maxY);

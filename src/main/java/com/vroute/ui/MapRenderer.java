@@ -87,9 +87,9 @@ public class MapRenderer {
         }
     }
 
-    public static void drawPath(Pane root, PathFinder pathFinder, Position startPos, Position endPos,
+    public static void drawPath(Pane root, Environment environment, Position startPos, Position endPos,
             LocalDateTime timeContext, int cellSize) {
-        List<Position> path = pathFinder.findPath(startPos, endPos, timeContext);
+        List<Position> path = PathFinder.findPath(environment, startPos, endPos, timeContext);
         if (path != null && !path.isEmpty()) {
             for (int i = 0; i < path.size() - 1; i++) {
                 Position current = path.get(i);

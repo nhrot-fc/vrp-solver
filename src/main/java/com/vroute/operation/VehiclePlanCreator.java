@@ -60,12 +60,10 @@ import java.util.List;
 public class VehiclePlanCreator {
 
     private final Environment environment;
-    private final PathFinder pathFinder;
     private final Depot mainDepot;
 
     public VehiclePlanCreator(Environment environment) {
         this.environment = environment;
-        this.pathFinder = new PathFinder(environment);
         this.mainDepot = environment.getMainDepot();
     }
 
@@ -95,10 +93,10 @@ public class VehiclePlanCreator {
     private LocalDateTime driveToLocation(Vehicle vehicle, Position destination, LocalDateTime currentTime,
             List<VehicleAction> actions) throws NoPathFoundException, InsufficientFuelException {
         if (vehicle.getCurrentPosition().equals(destination)) {
-            return currentTime; // Already at destination, no time change
+            return currentTime;
         }
 
-        List<Position> path = pathFinder.findPath(vehicle.getCurrentPosition(), destination, currentTime);
+        List<Position> path = PathFinder.findPath(environment, vehicle.getCurrentPosition(), destination, currentTime);
         if (path.isEmpty()) {
             throw new NoPathFoundException("No path found from " + vehicle.getCurrentPosition() + " to " + destination);
         }
@@ -127,7 +125,7 @@ public class VehiclePlanCreator {
             return true;
         }
 
-        List<Position> path = pathFinder.findPath(vehicle.getCurrentPosition(), destination, currentTime);
+        List<Position> path = PathFinder.findPath(environment, vehicle.getCurrentPosition(), destination, currentTime);
         if (path.isEmpty()) {
             return false;
         }
@@ -206,13 +204,14 @@ public class VehiclePlanCreator {
 
                 // int glpNeeded = 0;
                 // for (int j = i; j < instructions.size(); j++) {
-                //     DeliveryInstruction nextInst = instructions.get(j);
-                //     if (vehicle.getCurrentGlpM3() + glpNeeded + nextInst.getGlpAmountToDeliver() <= currentVehicle
-                //             .getGlpCapacityM3()) {
-                //         glpNeeded += nextInst.getGlpAmountToDeliver();
-                //     } else {
-                //         break;
-                //     }
+                // DeliveryInstruction nextInst = instructions.get(j);
+                // if (vehicle.getCurrentGlpM3() + glpNeeded + nextInst.getGlpAmountToDeliver()
+                // <= currentVehicle
+                // .getGlpCapacityM3()) {
+                // glpNeeded += nextInst.getGlpAmountToDeliver();
+                // } else {
+                // break;
+                // }
                 // }
 
                 int glpNeeded = currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3();

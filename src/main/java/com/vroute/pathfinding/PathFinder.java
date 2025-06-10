@@ -7,16 +7,16 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 public class PathFinder {
-    private Environment environment;
     private static final double EDGE_WEIGHT_KM = Constants.NODE_DISTANCE;
     private static final double VEHICLE_SPEED_KMPH = Constants.VEHICLE_AVG_SPEED;
     private static final double TIME_PER_EDGE_HOURS = EDGE_WEIGHT_KM / VEHICLE_SPEED_KMPH;
     
-    public PathFinder(Environment environment) { // Constructor updated
-        this.environment = environment;
+    // Private constructor to prevent instantiation
+    private PathFinder() {
+        // This class should not be instantiated
     }
 
-    public List<Position> findPath(Position startPos, Position endPos, LocalDateTime startTime) {
+    public static List<Position> findPath(Environment environment, Position startPos, Position endPos, LocalDateTime startTime) {
         Grid grid = environment.getGrid();
         Node startNode = grid.getNode(startPos.getX(), startPos.getY());
         Node endNode = grid.getNode(endPos.getX(), endPos.getY());
@@ -87,12 +87,12 @@ public class PathFinder {
         return new ArrayList<>();
     }
 
-    private double calculateHeuristic(Node a, Node b) {
+    private static double calculateHeuristic(Node a, Node b) {
         return (Math.abs(a.position.getX() - b.position.getX()) +
                 Math.abs(a.position.getY() - b.position.getY())) * EDGE_WEIGHT_KM;
     }
 
-    private List<Position> reconstructPath(Node endNode) {
+    private static List<Position> reconstructPath(Node endNode) {
         List<Position> path = new ArrayList<>();
         Node currentNode = endNode;
         while (currentNode != null) {
