@@ -1,62 +1,50 @@
 package com.vroute.assignation;
 
+import com.vroute.models.Order;
+import com.vroute.models.Vehicle;
+import com.vroute.operation.VehiclePlan;
+
 import java.util.List;
-import java.util.HashMap;
 import java.util.Map;
 
-import com.vroute.models.Position;
-import com.vroute.models.Vehicle;
-
 public class Solution {
-    private final Map<Vehicle, List<DeliveryInstruction>> vehicleOrderAssignments;
-    private final double totalDistance;
+    // El plan completo: un mapa que asocia cada vehículo con su ruta.
+    private final Map<Vehicle, VehiclePlan> vehiclePlans;
 
-    public Solution(Map<Vehicle, List<DeliveryInstruction>> vehicleOrderAssignments) {
-        this.vehicleOrderAssignments = new HashMap<>(vehicleOrderAssignments);
-        this.totalDistance = calculateDistance();
+    // Pedidos que, en esta solución, no pudieron ser atendidos.
+    // En una solución final y válida, esta lista debe estar vacía.
+    private final List<Order> unassignedOrders;
+
+    // El costo total de la solución, es la suma de los costos de cada ruta
+    // más las penalizaciones por restricciones no cumplidas (ej. pedidos no
+    // asignados).
+    // Este es el valor que Tabu Search intentará minimizar.
+    private final double totalCost;
+
+    public Solution(Map<Vehicle, VehiclePlan> plans, List<Order> unassignedOrders, double totalCost) {
+        this.vehiclePlans = plans;
+        this.unassignedOrders = unassignedOrders;
+        this.totalCost = totalCost;
     }
 
-    public double getTotalDistance() {
-        return totalDistance;
+    public Map<Vehicle, VehiclePlan> getVehiclePlans() {
+        return vehiclePlans;
     }
 
-    public Map<Vehicle, List<DeliveryInstruction>> getVehicleOrderAssignments() {
-        return vehicleOrderAssignments;
+    public List<Order> getUnassignedOrders() {
+        return unassignedOrders;
     }
 
-    private double calculateDistance() {
-        double distance = 0.0;
-        for (Map.Entry<Vehicle, List<DeliveryInstruction>> entry : vehicleOrderAssignments.entrySet()) {
-            Vehicle vehicle = entry.getKey();
-            List<DeliveryInstruction> instructions = entry.getValue();
-
-            Position start = vehicle.getCurrentPosition();
-            for (DeliveryInstruction instruction : instructions) {
-                Position end = instruction.getCustomerPosition();
-                distance += start.distanceTo(end);
-                start = end;
-            }
-        }
-        return distance;
+    public double getTotalCost() {
+        return totalCost;
     }
 
-    @Override
-    public String toString() {
-        int totalOrdersAssignedCount = 0;
-        for (List<DeliveryInstruction> instructions : vehicleOrderAssignments.values()) {
-            totalOrdersAssignedCount += instructions.size();
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(
-                String.format("Solution: %d delivery instructions assigned, total distance: %.2f km\n",
-                        totalOrdersAssignedCount, totalDistance));
-
-        for (Map.Entry<Vehicle, List<DeliveryInstruction>> entry : vehicleOrderAssignments.entrySet()) {
-            sb.append(String.format("  Vehicle %s: %d instructions\n",
-                    entry.getKey().getId(), entry.getValue().size()));
-        }
-
-        return sb.toString();
+    /**
+     * Verifica si la solución es factible, es decir, si cumple con todas las
+     * restricciones.
+     * En particular, una solución es factible si no hay pedidos sin asignar.
+     */
+    public boolean isFeasible() {
+        return unassignedOrders.isEmpty();
     }
 }

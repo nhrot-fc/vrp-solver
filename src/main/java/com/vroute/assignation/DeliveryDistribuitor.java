@@ -15,22 +15,17 @@ import java.util.Random;
 
 public class DeliveryDistribuitor {
 
-    private final Environment environment;
-    private final Random random = new Random();
+    private static final Random random = new Random();
     private static final int MIN_PRACTICAL_SPLIT_THRESHOLD = 1;
 
-    public DeliveryDistribuitor(Environment environment) {
-        this.environment = environment;
-    }
-
-    public Solution createInitialRandomAssignments() {
+    public static Map<Vehicle, List<DeliveryInstruction>> createInitialRandomAssignments(Environment environment) {
         Map<Vehicle, List<DeliveryInstruction>> assignments = new HashMap<>();
         List<Vehicle> allVehicles = environment.getAvailableVehicles();
         List<Order> pendingOrders = new ArrayList<>(environment.getPendingOrders());
 
         if (allVehicles.isEmpty()) {
             System.err.println("Warning: No available vehicles for assignment.");
-            return new Solution(new HashMap<>());
+            return new HashMap<>();
         }
 
         for (Vehicle vehicle : allVehicles) {
@@ -96,6 +91,6 @@ public class DeliveryDistribuitor {
                 currentVehicleIndexInSortedList++;
             }
         }
-        return new Solution(assignments);
+        return assignments;
     }
 }
