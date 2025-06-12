@@ -49,9 +49,30 @@ public class MetaheuristicAssignator implements Assignator {
     public Solution solve(Environment env) {
         this.environment = env;
         this.temperature = TEMPERATURE_INITIAL;
+        
+        // Check if there are pending orders
+        List<Order> pendingOrders = environment.getPendingOrders();
+        if (pendingOrders.isEmpty()) {
+            System.err.println("MetaheuristicAssignator: No pending orders to assign.");
+            return new Solution(new HashMap<>());
+        }
+        
+        // Check if there are available vehicles
+        List<Vehicle> availableVehicles = environment.getAvailableVehicles();
+        if (availableVehicles.isEmpty()) {
+            System.err.println("MetaheuristicAssignator: No available vehicles for assignment.");
+            return new Solution(new HashMap<>());
+        }
 
         Solution currentSolution = deliveryDistribuitor.createInitialRandomAssignments();
         Solution bestSolution = currentSolution;
+
+        // Check if the initial solution has any assignments (it might be empty if there are no valid orders)
+        if (currentSolution.getVehicleOrderAssignments().isEmpty() || 
+            currentSolution.getTotalDistance() == 0) {
+            System.err.println("MetaheuristicAssignator: Initial solution is empty. Nothing to optimize.");
+            return currentSolution;
+        }
 
         LinkedList<TabuMove> tabuList = new LinkedList<>();
 
@@ -129,13 +150,31 @@ public class MetaheuristicAssignator implements Assignator {
     private TabuMove generateRandomMove(Solution solution) {
         Map<Vehicle, List<DeliveryInstruction>> assignments = solution.getVehicleOrderAssignments();
         List<Vehicle> vehicles = new ArrayList<>(assignments.keySet());
+        
+        // Safety check for empty assignments
+        if (vehicles.isEmpty()) {
+            System.err.println("Warning: No vehicles with assignments available for move generation");
+            // Create a dummy TabuMove that will result in no changes when applied
+            Vehicle dummyVehicle = environment.getAvailableVehicles().isEmpty() ?
+                new Vehicle("DUMMY", null, null) :
+                environment.getAvailableVehicles().get(0);
+            return new TabuMove(dummyVehicle, 0, 0);
+        }
 
         if (vehicles.size() < 2) {
             Vehicle vehicle = vehicles.get(0);
             List<DeliveryInstruction> instructions = assignments.get(vehicle);
+            
+            // Check if there are any instructions for this vehicle
+            if (instructions == null || instructions.isEmpty()) {
+                // No instructions at all
+                return new TabuMove(vehicle, 0, 0);
+            }
+            
             if (instructions.size() < 2) {
                 return new TabuMove(vehicle, 0, 0);
             }
+            
             int idx1 = random.nextInt(instructions.size());
             int idx2;
             do {
@@ -207,6 +246,12 @@ public class MetaheuristicAssignator implements Assignator {
     }
 
     private Solution applyMove(Solution solution, TabuMove move) {
+        // Safety check for empty solutions
+        if (solution.getVehicleOrderAssignments().isEmpty()) {
+            System.err.println("Warning: Attempting to apply move to empty solution");
+            return solution;
+        }
+        
         Map<Vehicle, List<DeliveryInstruction>> currentAssignments = solution.getVehicleOrderAssignments();
         Map<Vehicle, List<DeliveryInstruction>> newAssignments = new HashMap<>();
         for (Map.Entry<Vehicle, List<DeliveryInstruction>> entry : currentAssignments.entrySet()) {
@@ -215,14 +260,24 @@ public class MetaheuristicAssignator implements Assignator {
 
         Vehicle sourceVehicle = move.getSourceVehicle();
         Vehicle targetVehicle = move.getTargetVehicle();
+        
+        // Check if vehicles exist in assignments
+        if (!newAssignments.containsKey(sourceVehicle)) {
+            System.err.println("Warning: Source vehicle " + sourceVehicle.getId() + " not found in assignments");
+            return solution;
+        }
+        
         List<DeliveryInstruction> sourceInstructions = newAssignments.get(sourceVehicle);
         List<DeliveryInstruction> targetInstructions = newAssignments.get(targetVehicle);
 
+        // Validate source instructions
         if (sourceInstructions == null || sourceInstructions.isEmpty() ||
                 move.getSourceInstructionIndex() >= sourceInstructions.size()) {
+            System.err.println("Warning: Invalid source instruction index or empty source instructions");
             return solution;
         }
 
+        // Create target instructions list if it doesn't exist
         if (targetInstructions == null) {
             targetInstructions = new ArrayList<>();
             newAssignments.put(targetVehicle, targetInstructions);
@@ -375,7 +430,18 @@ public class MetaheuristicAssignator implements Assignator {
     private Solution ensureAllOrdersDelivered(Solution solution) {
         Map<Vehicle, List<DeliveryInstruction>> currentAssignments = solution.getVehicleOrderAssignments();
 
+        // If there are no assignments at all (no vehicles), return as is
+        if (currentAssignments.isEmpty()) {
+            System.err.println("No vehicle assignments available to ensure order delivery.");
+            return solution;
+        }
+
         List<Order> pendingOrders = environment.getPendingOrders();
+        
+        // If there are no pending orders, return as is
+        if (pendingOrders.isEmpty()) {
+            return solution;
+        }
 
         Set<String> assignedOrderIds = new HashSet<>();
         for (List<DeliveryInstruction> instructions : currentAssignments.values()) {
@@ -391,6 +457,7 @@ public class MetaheuristicAssignator implements Assignator {
             }
         }
 
+        // If all orders are already assigned, return as is
         if (unassignedOrders.isEmpty()) {
             return solution;
         }
@@ -401,6 +468,12 @@ public class MetaheuristicAssignator implements Assignator {
         }
 
         List<Vehicle> sortedVehicles = new ArrayList<>(newAssignments.keySet());
+        // If there are no vehicles with assignments, return original solution
+        if (sortedVehicles.isEmpty()) {
+            System.err.println("No vehicles available to assign remaining orders.");
+            return solution;
+        }
+        
         Collections.sort(sortedVehicles, Comparator.comparingInt(v -> newAssignments.get(v).size()));
 
         for (Order order : unassignedOrders) {

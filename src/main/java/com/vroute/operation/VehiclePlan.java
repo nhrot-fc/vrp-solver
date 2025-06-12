@@ -119,6 +119,116 @@ public class VehiclePlan {
         return VehicleStatus.AVAILABLE;
     }
 
+    /**
+     * Gets the action that should be executed at the given time
+     * 
+     * @param time The time to check
+     * @return The action to execute at that time, or null if no action is scheduled
+     */
+    public Action getActionAt(LocalDateTime time) {
+        if (this.actions.isEmpty() || time.isBefore(this.startTime)) {
+            return null;
+        }
+
+        LocalDateTime currentActionStartTime = this.startTime;
+        for (Action action : this.actions) {
+            LocalDateTime currentActionEndTime = currentActionStartTime.plus(action.getDuration());
+
+            if (!time.isBefore(currentActionStartTime) && time.isBefore(currentActionEndTime)) {
+                return action;
+            }
+            currentActionStartTime = currentActionEndTime;
+        }
+
+        return null;
+    }
+
+    /**
+     * Gets the start time for the given action
+     * 
+     * @param action The action to find
+     * @return The start time of the action, or null if the action is not in the plan
+     */
+    public LocalDateTime getActionStartTime(Action action) {
+        if (this.actions.isEmpty() || !this.actions.contains(action)) {
+            return null;
+        }
+
+        LocalDateTime currentActionStartTime = this.startTime;
+        for (Action currentAction : this.actions) {
+            if (currentAction == action) {
+                return currentActionStartTime;
+            }
+            currentActionStartTime = currentActionStartTime.plus(currentAction.getDuration());
+        }
+
+        return null;
+    }
+
+    /**
+     * Gets the end time for the given action
+     * 
+     * @param action The action to find
+     * @return The end time of the action, or null if the action is not in the plan
+     */
+    public LocalDateTime getActionEndTime(Action action) {
+        LocalDateTime startTime = getActionStartTime(action);
+        if (startTime == null) {
+            return null;
+        }
+        return startTime.plus(action.getDuration());
+    }
+    
+    /**
+     * Gets the next action to execute at the given time.
+     * 
+     * @param currentTime The current time
+     * @return The next action to execute, or null if no action is scheduled
+     */
+    public Action getNextAction(LocalDateTime currentTime) {
+        if (isCompleted()) {
+            return null;
+        }
+        
+        LocalDateTime actionStartTime = this.startTime;
+        for (Action action : this.actions) {
+            LocalDateTime actionEndTime = actionStartTime.plus(action.getDuration());
+            
+            if (currentTime.isBefore(actionEndTime)) {
+                // This action extends or starts after the current time
+                return action;
+            }
+            
+            actionStartTime = actionEndTime;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Checks if the plan is completed.
+     * 
+     * @return true if all actions have been executed, false otherwise
+     */
+    public boolean isCompleted() {
+        if (this.actions.isEmpty()) {
+            return true;
+        }
+        
+        // Calculate the end time of the last action
+        LocalDateTime endTime = this.startTime;
+        for (Action action : this.actions) {
+            endTime = endTime.plus(action.getDuration());
+        }
+        
+        // If the current time is after the end time, the plan is completed
+        return LocalDateTime.now().isAfter(endTime);
+    }
+
+    public int getOrderCount() {
+        return servedOrders.size();
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

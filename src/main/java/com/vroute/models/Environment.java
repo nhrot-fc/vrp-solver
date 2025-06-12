@@ -99,6 +99,14 @@ public class Environment {
                 .collect(Collectors.toList());
     }
 
+    public void addVehicle(Vehicle vehicle) {
+        vehicles.add(vehicle);
+    }
+
+    public void addAuxDepot(Depot depot) {
+        auxDepots.add(depot);
+    }
+
     public void addBlockage(Blockage blockage) {
         activeBlockages.add(blockage);
     }

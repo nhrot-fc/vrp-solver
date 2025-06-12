@@ -201,6 +201,10 @@ public class SimulationStats {
         this.totalBlockageDuration = this.totalBlockageDuration.plus(duration);
     }
     
+    public void incrementTotalReplans() {
+        this.totalReplans++;
+    }
+    
     public void recordReplan(long planningTimeMillis) {
         this.totalReplans++;
         this.totalPlanningTimeMillis += planningTimeMillis;

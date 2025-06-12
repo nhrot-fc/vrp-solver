@@ -31,7 +31,7 @@ public class DeliveryInstruction {
     }
 
     public LocalDateTime getDueDate() {
-        return originalOrder.getDueDate();
+        return originalOrder.getDueTime();
     }
 
     public int getGlpAmountToDeliver() {

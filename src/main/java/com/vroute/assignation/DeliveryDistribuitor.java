@@ -28,6 +28,17 @@ public class DeliveryDistribuitor {
         List<Vehicle> allVehicles = environment.getAvailableVehicles();
         List<Order> pendingOrders = new ArrayList<>(environment.getPendingOrders());
 
+        // If there are no pending orders, return an empty solution
+        if (pendingOrders.isEmpty()) {
+            System.err.println("Warning: No pending orders to assign.");
+            // Still create empty lists for available vehicles
+            for (Vehicle vehicle : allVehicles) {
+                assignments.put(vehicle, new ArrayList<>());
+            }
+            return new Solution(assignments);
+        }
+
+        // If there are no available vehicles, return an empty solution
         if (allVehicles.isEmpty()) {
             System.err.println("Warning: No available vehicles for assignment.");
             return new Solution(new HashMap<>());
@@ -37,7 +48,7 @@ public class DeliveryDistribuitor {
             assignments.put(vehicle, new ArrayList<>());
         }
 
-        pendingOrders.sort(Comparator.comparing(Order::getDueDate, Comparator.nullsLast(Comparator.naturalOrder())));
+        pendingOrders.sort(Comparator.comparing(Order::getDueTime, Comparator.nullsLast(Comparator.naturalOrder())));
 
         for (Order order : pendingOrders) {
             int totalGlpToAssignForThisOrder = order.getRemainingGlpM3();
@@ -73,14 +84,38 @@ public class DeliveryDistribuitor {
                 }
 
                 Vehicle targetVehicle = vehiclesSortedByProximity.get(currentVehicleIndexInSortedList);
+                
+                // Get the vehicle's maximum capacity
+                int vehicleMaxCapacity = targetVehicle.getType().getCapacityM3();
+                
+                // Check how many assignments this vehicle already has
+                int currentVehicleAssignmentCount = assignments.get(targetVehicle).size();
+                
+                // If this vehicle already has too many assignments, try the next one
+                if (currentVehicleAssignmentCount >= 10) { // Arbitrary limit to avoid overloading vehicles
+                    currentVehicleIndexInSortedList++;
+                    continue;
+                }
+                
                 int remainingToAssignCurrently = totalGlpToAssignForThisOrder - glpAssignedSoFarForThisOrder;
                 int amountForThisInstruction;
 
+                // Consider vehicle capacity when assigning
                 if (remainingToAssignCurrently <= MIN_PRACTICAL_SPLIT_THRESHOLD) {
                     amountForThisInstruction = remainingToAssignCurrently;
                 } else {
-                    amountForThisInstruction = MIN_PRACTICAL_SPLIT_THRESHOLD +
-                            random.nextInt(remainingToAssignCurrently - MIN_PRACTICAL_SPLIT_THRESHOLD + 1);
+                    int maxPossibleForVehicle = Math.min(vehicleMaxCapacity, remainingToAssignCurrently);
+                    
+                    // Ensure we're not going below our minimum threshold
+                    int effectiveMin = Math.min(MIN_PRACTICAL_SPLIT_THRESHOLD, maxPossibleForVehicle);
+                    
+                    // Calculate a random amount between min and max
+                    if (maxPossibleForVehicle > effectiveMin) {
+                        amountForThisInstruction = effectiveMin +
+                                random.nextInt(maxPossibleForVehicle - effectiveMin + 1);
+                    } else {
+                        amountForThisInstruction = maxPossibleForVehicle;
+                    }
                 }
 
                 amountForThisInstruction = Math.min(amountForThisInstruction, remainingToAssignCurrently);

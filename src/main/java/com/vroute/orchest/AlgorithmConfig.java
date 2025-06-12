@@ -37,7 +37,7 @@ public class AlgorithmConfig {
         config.setMinimumDeliveryTimeHours(4); // Default 4 hours for delivery
         
         // Simulation defaults
-        config.setSimulationStepMinutes(5); // 5-minute steps
+        config.setSimulationStepMinutes(1); // 5-minute steps
         config.setSimulationMaxDays(7); // 7-day simulation
         
         // Penalty defaults

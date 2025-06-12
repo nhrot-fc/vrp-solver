@@ -7,8 +7,8 @@ import java.util.List;
 public class Order implements Stop {
     // unmutable attributes
     private final String id;
-    private final LocalDateTime arriveDate;
-    private final LocalDateTime dueDate;
+    private final LocalDateTime arriveTime;
+    private final LocalDateTime dueTime;
     private final int glpRequestM3;
     private final Position position;
 
@@ -18,8 +18,8 @@ public class Order implements Stop {
 
     public Order(String id, LocalDateTime arriveDate, LocalDateTime dueDate, int glpRequestM3, Position position) {
         this.id = id;
-        this.arriveDate = arriveDate;
-        this.dueDate = dueDate;
+        this.arriveTime = arriveDate;
+        this.dueTime = dueDate;
         this.glpRequestM3 = glpRequestM3;
         this.position = position;
 
@@ -32,12 +32,12 @@ public class Order implements Stop {
         return id;
     }
 
-    public LocalDateTime getArriveDate() {
-        return arriveDate;
+    public LocalDateTime getArriveTime() {
+        return arriveTime;
     }
 
-    public LocalDateTime getDueDate() {
-        return dueDate;
+    public LocalDateTime getDueTime() {
+        return dueTime;
     }
 
     public int getGlpRequestM3() {
@@ -68,7 +68,7 @@ public class Order implements Stop {
     }
 
     public boolean isOverdue(LocalDateTime referenceDateTime) {
-        return referenceDateTime.isAfter(dueDate);
+        return referenceDateTime.isAfter(dueTime);
     }
 
     public int timeUntilDue(LocalDateTime referenceDateTime) {
@@ -77,7 +77,7 @@ public class Order implements Stop {
         if (isOverdue(referenceDateTime))
             return -1;
 
-        Duration duration = Duration.between(referenceDateTime, dueDate);
+        Duration duration = Duration.between(referenceDateTime, dueTime);
         long minutesUntilDue = duration.toMinutes();
 
         return (int) minutesUntilDue;
@@ -98,7 +98,7 @@ public class Order implements Stop {
         return String.format("📦 %s %s [🕒 %s] [GLP: %d/%d m³] %s",
                 id,
                 status,
-                dueDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")),
+                dueTime.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")),
                 remainingGlpM3,
                 glpRequestM3,
                 position);
@@ -107,8 +107,8 @@ public class Order implements Stop {
     public Order clone() {
         Order clonedOrder = new Order(
                 this.id,
-                this.arriveDate,
-                this.dueDate,
+                this.arriveTime,
+                this.dueTime,
                 this.glpRequestM3,
                 this.position);
 

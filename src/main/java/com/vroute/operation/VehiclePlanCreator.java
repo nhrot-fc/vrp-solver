@@ -65,7 +65,7 @@ public class VehiclePlanCreator {
 
     public static LocalDateTime vehicleRefuel(Vehicle vehicle, Depot fuelDepot, LocalDateTime currentTime,
             List<Action> actions) {
-        Action refuelAction = ActionFactory.createRefuelingAction(fuelDepot, vehicle);
+        Action refuelAction = ActionFactory.createRefuelingAction(fuelDepot, vehicle, currentTime);
         actions.add(refuelAction);
         vehicle.refuel();
         return currentTime.plus(refuelAction.getDuration());
@@ -74,7 +74,7 @@ public class VehiclePlanCreator {
     public static LocalDateTime vehicleRefill(Vehicle vehicle, Depot glpDepot, int glpAmountM3,
             LocalDateTime currentTime,
             List<Action> actions) {
-        Action refillAction = ActionFactory.createRefillingAction(glpDepot, glpAmountM3);
+        Action refillAction = ActionFactory.createRefillingAction(glpDepot, glpAmountM3, currentTime);
         actions.add(refillAction);
         vehicle.refill(glpAmountM3);
         return currentTime.plus(refillAction.getDuration());
@@ -109,7 +109,7 @@ public class VehiclePlanCreator {
 
         Duration duration = Duration.ofMinutes((int) (distanceKm / Constants.VEHICLE_AVG_SPEED * 60.0));
 
-        Action drivingAction = ActionFactory.createDrivingAction(path, duration, fuelConsumedGal);
+        Action drivingAction = ActionFactory.createDrivingAction(path, fuelConsumedGal, currentTime, currentTime.plus(duration));
         actions.add(drivingAction);
 
         vehicle.setCurrentPosition(destination);
@@ -206,19 +206,6 @@ public class VehiclePlanCreator {
                 DeliveryInstruction inst = instructions.get(i);
                 Order order = inst.getOriginalOrder().clone();
                 Position orderPos = order.getPosition();
-
-                // int glpNeeded = 0;
-                // for (int j = i; j < instructions.size(); j++) {
-                // DeliveryInstruction nextInst = instructions.get(j);
-                // if (vehicle.getCurrentGlpM3() + glpNeeded + nextInst.getGlpAmountToDeliver()
-                // <= currentVehicle
-                // .getGlpCapacityM3()) {
-                // glpNeeded += nextInst.getGlpAmountToDeliver();
-                // } else {
-                // break;
-                // }
-                // }
-
                 int glpNeeded = currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3();
 
                 if (currentVehicle.getCurrentGlpM3() < glpNeeded) {
@@ -247,7 +234,8 @@ public class VehiclePlanCreator {
                 Action servingAction = ActionFactory.createServingAction(
                         orderPos,
                         order,
-                        inst.getGlpAmountToDeliver());
+                        inst.getGlpAmountToDeliver(),
+                        currentTime);
                 actions.add(servingAction);
 
                 currentVehicle.dispenseGlp(inst.getGlpAmountToDeliver());
@@ -272,7 +260,8 @@ public class VehiclePlanCreator {
                 currentTime = driveToLocation(environment, currentVehicle, mainDepotPos, currentTime, actions);
                 Action maintenanceAction = ActionFactory.createMaintenanceAction(
                         mainDepotPos,
-                        Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES));
+                        Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES),
+                        currentTime);
                 actions.add(maintenanceAction);
 
                 currentTime = currentTime.plus(maintenanceAction.getDuration());

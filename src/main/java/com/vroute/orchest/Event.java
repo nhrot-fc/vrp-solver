@@ -7,19 +7,6 @@ import java.time.LocalDateTime;
  * Events are ordered by their scheduled time.
  */
 public class Event implements Comparable<Event> {
-
-    public enum EventType {
-        ORDER_ARRIVAL,         // New order arrives
-        VEHICLE_BREAKDOWN,     // Vehicle breaks down
-        BLOCKAGE_START,        // Road blockage begins
-        BLOCKAGE_END,          // Road blockage ends
-        MAINTENANCE_START,     // Vehicle maintenance begins
-        MAINTENANCE_END,       // Vehicle maintenance ends
-        GLP_DEPOT_REFILL,      // GLP depot gets refilled
-        PLAN_CHECKPOINT,       // Regular checkpoint for plan verification
-        SIMULATION_END         // End of simulation
-    }
-
     private final EventType type;
     private final LocalDateTime time;
     private final String entityId;  // ID of related entity (vehicle, order, blockage, etc.)

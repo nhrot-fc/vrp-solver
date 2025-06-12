@@ -244,7 +244,7 @@ public class Main extends Application {
             orders.add(order);
         }
 
-        orders.sort((o1, o2) -> o1.getDueDate().compareTo(o2.getDueDate()));
+        orders.sort((o1, o2) -> o1.getDueTime().compareTo(o2.getDueTime()));
 
         for (Order order : orders) {
             environment.addOrder(order);
@@ -252,8 +252,8 @@ public class Main extends Application {
 
         System.out.println("\n=== CREATED ORDERS ===");
         System.out.println("Total orders: " + orders.size());
-        System.out.println("Earliest due date: " + orders.get(0).getDueDate());
-        System.out.println("Latest due date: " + orders.get(orders.size() - 1).getDueDate());
+        System.out.println("Earliest due date: " + orders.get(0).getDueTime());
+        System.out.println("Latest due date: " + orders.get(orders.size() - 1).getDueTime());
         System.out.println("=====================\n");
     }
 
