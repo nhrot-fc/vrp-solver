@@ -97,12 +97,9 @@ public class Main extends Application {
         planDetailsBox.getChildren().add(new Label("Solution Summary:"));
         planDetailsBox.getChildren().add(new Label(solution.toString()));
 
-        // Create plans for each vehicle
-        VehiclePlanCreator planCreator = new VehiclePlanCreator(environment);
-
         solution.getVehicleOrderAssignments().forEach((vehicle, instructions) -> {
             if (!instructions.isEmpty()) {
-                VehiclePlan plan = planCreator.createPlan(vehicle, instructions, environment.getCurrentTime());
+                VehiclePlan plan = VehiclePlanCreator.createPlan(environment, vehicle, instructions);
                 if (plan != null) {
                     vehiclePlans.put(vehicle, plan);
                     System.out.println(plan);

@@ -16,6 +16,7 @@ JAVAFX_JARS = $(shell find $(LIB_DIR) -name '*.jar' | tr '\n' ':')
 
 # Nombre completo de la clase principal (con paquete)
 MAIN_CLASS = com.vroute.Main
+SIMULATION_CLASS = com.vroute.SimulationLauncher
 
 # Regla por defecto
 all: compile
@@ -25,13 +26,18 @@ compile:
 	@echo "Creando directorio de salida: $(BIN_DIR)..."
 	@mkdir -p $(BIN_DIR)
 	@echo "Compilando con JavaFX..."
-	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/Main.java
+	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/Main.java $(SRC_ROOT)/com/vroute/SimulationLauncher.java
 	@echo "Compilación finalizada."
 
-# Regla para ejecutar
+# Regla para ejecutar la aplicación principal
 run: compile
 	@echo "Ejecutando $(MAIN_CLASS) con JavaFX..."
 	java --module-path $(LIB_DIR) --add-modules javafx.controls,javafx.fxml -cp $(BIN_DIR):$(JAVAFX_JARS) $(MAIN_CLASS)
+
+# Regla para ejecutar el simulador con visualización
+run-simulation: compile
+	@echo "Ejecutando $(SIMULATION_CLASS) con JavaFX..."
+	java --module-path $(LIB_DIR) --add-modules javafx.controls,javafx.fxml -cp $(BIN_DIR):$(JAVAFX_JARS) $(SIMULATION_CLASS)
 
 # Regla para limpiar los archivos generados
 clean:
@@ -39,4 +45,4 @@ clean:
 	@rm -rf $(BIN_DIR)
 	@echo "Limpieza finalizada."
 
-.PHONY: all compile run clean
+.PHONY: all compile run run-simulation clean

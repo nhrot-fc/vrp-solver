@@ -12,14 +12,14 @@ import com.vroute.models.VehicleStatus;
 
 public class VehiclePlan {
     private final Vehicle vehicle;
-    private final List<VehicleAction> actions;
+    private final List<Action> actions;
     private final LocalDateTime startTime;
     private final List<Order> servedOrders;
     private final double totalDistanceKm;
     private final double totalGlpDeliveredM3;
     private final double totalFuelConsumedGal;
 
-    public VehiclePlan(Vehicle vehicle, List<VehicleAction> actions, LocalDateTime startTime) {
+    public VehiclePlan(Vehicle vehicle, List<Action> actions, LocalDateTime startTime) {
         this.vehicle = vehicle;
         this.actions = new ArrayList<>(actions);
         this.startTime = startTime;
@@ -29,12 +29,12 @@ public class VehiclePlan {
         int glpDelivered = 0;
         double fuelConsumed = 0;
 
-        for (VehicleAction action : this.actions) {
-            if (action.getType() == ActionType.SERVING && action.getOrder() != null) {
+        for (Action action : this.actions) {
+            if (action.getType() == ActionType.SERVE && action.getOrder() != null) {
                 servedOrdersList.add(action.getOrder());
                 glpDelivered += Math.abs(action.getGlpChangeM3());
             }
-            if (action.getType() == ActionType.DRIVING) {
+            if (action.getType() == ActionType.DRIVE) {
                 Position pathStart = action.getPath().getFirst();
                 for (Position pos : action.getPath()) {
                     distKm += pathStart.distanceTo(pos);
@@ -54,7 +54,7 @@ public class VehiclePlan {
         return vehicle;
     }
 
-    public List<VehicleAction> getActions() {
+    public List<Action> getActions() {
         return Collections.unmodifiableList(actions);
     }
 
@@ -79,7 +79,7 @@ public class VehiclePlan {
     }
 
     public Position getFinalPosition() {
-        return actions.isEmpty() ? vehicle.getCurrentPosition() : actions.get(actions.size() - 1).getEndPosition();
+        return actions.isEmpty() ? vehicle.getCurrentPosition() : actions.get(actions.size() - 1).getDestination();
     }
 
     public VehicleStatus getStatusAt(LocalDateTime time) {
@@ -92,27 +92,23 @@ public class VehiclePlan {
         }
 
         LocalDateTime currentActionStartTime = this.startTime;
-        for (VehicleAction action : this.actions) {
+        for (Action action : this.actions) {
             LocalDateTime currentActionEndTime = currentActionStartTime.plus(action.getDuration());
 
             if (!time.isBefore(currentActionStartTime) && time.isBefore(currentActionEndTime)) {
                 switch (action.getType()) {
-                    case DRIVING:
+                    case DRIVE:
                         return VehicleStatus.DRIVING;
-                    case REFUELING:
+                    case REFUEL:
                         return VehicleStatus.REFUELING;
-                    case REFILLING:
-                        return VehicleStatus.REFILLING;
-                    case SERVING:
+                    case RELOAD:
+                        return VehicleStatus.RELOADING;
+                    case SERVE:
                         return VehicleStatus.SERVING;
                     case MAINTENANCE:
                         return VehicleStatus.MAINTENANCE;
-                    case TRANSFERRING:
-                        return VehicleStatus.TRANSFERRING;
-                    case IDLE:
+                    case WAIT:
                         return VehicleStatus.IDLE;
-                    case STORAGE_CHECK:
-                        return VehicleStatus.MAINTENANCE;
                     default:
                         return VehicleStatus.UNAVAILABLE;
                 }
@@ -131,7 +127,7 @@ public class VehiclePlan {
 
         LocalDateTime currentActionTime = this.startTime;
         for (int i = 0; i < actions.size(); i++) {
-            VehicleAction action = actions.get(i);
+            Action action = actions.get(i);
             sb.append(String.format("\n%d. [%s] %s",
                     i + 1,
                     currentActionTime.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")),

@@ -25,9 +25,8 @@ public class PathFinder {
             return new ArrayList<>();
         }
         
-        // Check if the start or end nodes are blocked
         if (environment.isNodeBlocked(startPos, startTime) || environment.isNodeBlocked(endPos, startTime)) {
-            return new ArrayList<>();  // No path possible if start or destination is blocked
+            return new ArrayList<>();
         }
 
         for (int x = 0; x < grid.getWidth(); x++) {

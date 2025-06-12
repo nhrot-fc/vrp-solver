@@ -2,6 +2,7 @@ package com.vroute.ui;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,8 +13,7 @@ import com.vroute.models.Environment;
 import com.vroute.models.Order;
 import com.vroute.models.Position;
 import com.vroute.models.Vehicle;
-import com.vroute.operation.ActionType;
-import com.vroute.operation.VehicleAction;
+import com.vroute.operation.Action;
 import com.vroute.operation.VehiclePlan;
 import com.vroute.pathfinding.PathFinder;
 
@@ -340,47 +340,141 @@ public class MapRenderer {
             return;
 
         Color vehicleColor = getVehicleColor(plan.getVehicle().getId());
+        Position currentPos = plan.getVehicle().getCurrentPosition();
+        
+        // To connect all actions visually
+        List<Position> allWaypoints = new ArrayList<>();
+        allWaypoints.add(currentPos);
+        
+        // Process all actions and draw route segments for each action type
+        for (Action action : plan.getActions()) {
+            Position actionEndPos = action.getDestination();
+            
+            switch (action.getType()) {
+                case DRIVE:
+                    List<Position> pathSegments = action.getPath();
+                    if (pathSegments != null && pathSegments.size() > 1) {
+                        // Add all waypoints to our complete path
+                        allWaypoints.addAll(pathSegments.subList(1, pathSegments.size()));
+                        
+                        // Draw the actual path with dashed lines
+                        for (int i = 0; i < pathSegments.size() - 1; i++) {
+                            Position startPos = pathSegments.get(i);
+                            Position endPos = pathSegments.get(i + 1);
 
-        for (VehicleAction action : plan.getActions()) {
-            if (action.getType() == ActionType.DRIVING) {
-                List<Position> pathSegments = action.getPath();
-                if (pathSegments != null && pathSegments.size() > 1) {
-                    for (int i = 0; i < pathSegments.size() - 1; i++) {
-                        Position startPos = pathSegments.get(i);
-                        Position endPos = pathSegments.get(i + 1);
+                            if (startPos == null || endPos == null) {
+                                System.err.println("Warning: Null position found in driving path for action: " + action);
+                                continue;
+                            }
 
-                        if (startPos == null || endPos == null) {
-                            System.err.println("Warning: Null position found in driving path for action: " + action);
-                            continue;
+                            Line line = new Line(
+                                    startPos.getX() * cellSize,
+                                    startPos.getY() * cellSize,
+                                    endPos.getX() * cellSize,
+                                    endPos.getY() * cellSize);
+                            line.setStroke(vehicleColor);
+                            line.setStrokeWidth(2);
+                            line.setOpacity(0.7);
+                            line.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+
+                            if (i % 2 == 0) {
+                                line.getStrokeDashArray().addAll(5.0, 5.0);
+                            }
+
+                            root.getChildren().add(line);
                         }
-
-                        Line line = new Line(
-                                startPos.getX() * cellSize,
-                                startPos.getY() * cellSize,
-                                endPos.getX() * cellSize,
-                                endPos.getY() * cellSize);
-                        line.setStroke(vehicleColor);
-                        line.setStrokeWidth(2);
-                        line.setOpacity(0.7);
-                        line.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
-
-                        if (i % 2 == 0) {
-                            line.getStrokeDashArray().addAll(5.0, 5.0);
-                        }
-
-                        root.getChildren().add(line);
                     }
-
-                    Position lastPos = pathSegments.get(pathSegments.size() - 1);
-                    Circle endMarker = new Circle(
-                            lastPos.getX() * cellSize,
-                            lastPos.getY() * cellSize,
-                            4);
-                    endMarker.setFill(vehicleColor);
-                    endMarker.setStroke(Color.WHITE);
-                    endMarker.setStrokeWidth(1);
-                    root.getChildren().add(endMarker);
+                    break;
+                
+                default:
+                    // For non-driving actions, connect to the previous position if needed
+                    if (actionEndPos != null && !currentPos.equals(actionEndPos)) {
+                        allWaypoints.add(actionEndPos);
+                    }
+                    break;
+            }
+            
+            // Add appropriate icon for the action type at the end position
+            if (actionEndPos != null) {
+                Circle actionMarker = new Circle(
+                        actionEndPos.getX() * cellSize,
+                        actionEndPos.getY() * cellSize,
+                        6);
+                
+                // Different colors/styles for different action types
+                switch (action.getType()) {
+                    case REFUEL:
+                        actionMarker.setFill(Color.YELLOW);
+                        actionMarker.setStroke(vehicleColor);
+                        break;
+                    case RELOAD:
+                        actionMarker.setFill(Color.LIGHTGREEN);
+                        actionMarker.setStroke(vehicleColor);
+                        break;
+                    case SERVE:
+                        actionMarker.setFill(Color.ORANGE);
+                        actionMarker.setStroke(vehicleColor);
+                        break;
+                    case MAINTENANCE:
+                        actionMarker.setFill(Color.LIGHTBLUE);
+                        actionMarker.setStroke(vehicleColor);
+                        break;
+                    case WAIT:
+                        actionMarker.setFill(Color.LIGHTGRAY);
+                        actionMarker.setStroke(vehicleColor);
+                        break;
+                    default:
+                        actionMarker.setFill(vehicleColor);
+                        actionMarker.setStroke(Color.WHITE);
+                        break;
                 }
+                
+                actionMarker.setStrokeWidth(1.5);
+                root.getChildren().add(actionMarker);
+                
+                // Add a small text indicator for the action type
+                String actionSymbol = "";
+                switch (action.getType()) {
+                    case REFUEL: actionSymbol = "⛽"; break;
+                    case RELOAD: actionSymbol = "🛢️"; break;
+                    case SERVE: actionSymbol = "🛒"; break;
+                    case MAINTENANCE: actionSymbol = "🔧"; break;
+                    case WAIT: actionSymbol = "⏸️"; break;
+                    default: break;
+                }
+                
+                if (!actionSymbol.isEmpty()) {
+                    Text actionText = new Text(
+                            actionEndPos.getX() * cellSize - 4,
+                            actionEndPos.getY() * cellSize + 4,
+                            actionSymbol);
+                    actionText.setFill(Color.BLACK);
+                    actionText.setFont(Font.font("Arial", FontWeight.BOLD, 9));
+                    root.getChildren().add(actionText);
+                }
+                
+                // Update current position for the next action
+                currentPos = actionEndPos;
+            }
+        }
+        
+        // Draw connected path for the entire route with a thinner line
+        if (allWaypoints.size() > 1) {
+            for (int i = 0; i < allWaypoints.size() - 1; i++) {
+                Position startPos = allWaypoints.get(i);
+                Position endPos = allWaypoints.get(i + 1);
+                
+                Line connectionLine = new Line(
+                        startPos.getX() * cellSize,
+                        startPos.getY() * cellSize,
+                        endPos.getX() * cellSize,
+                        endPos.getY() * cellSize);
+                connectionLine.setStroke(vehicleColor.deriveColor(0, 1, 1, 0.3));
+                connectionLine.setStrokeWidth(1);
+                
+                // Set this as path underneath the other elements
+                connectionLine.setViewOrder(100);
+                root.getChildren().add(connectionLine);
             }
         }
     }

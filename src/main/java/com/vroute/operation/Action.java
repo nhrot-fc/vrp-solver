@@ -7,11 +7,11 @@ import com.vroute.models.Constants;
 import com.vroute.models.Order;
 import com.vroute.models.Position;
 
-public class VehicleAction {
+public class Action {
     // General attributes for all actions
     private final ActionType type;
     private final Duration duration;
-    private final Position endPosition;
+    private final Position destination;
 
     // Serving specific attributes
     private final int glpChangeM3;
@@ -21,11 +21,11 @@ public class VehicleAction {
     private final double fuelChangeGal;
     private final List<Position> path;
 
-    public VehicleAction(ActionType type, List<Position> path, Position endPosition,
+    public Action(ActionType type, List<Position> path, Position endPosition,
             Duration duration, Order order, int glpChangeM3, double fuelChangeGal) {
         this.type = type;
         this.path = path;
-        this.endPosition = endPosition;
+        this.destination = endPosition;
         this.duration = duration;
         this.order = order;
         this.glpChangeM3 = glpChangeM3;
@@ -40,8 +40,8 @@ public class VehicleAction {
         return duration;
     }
 
-    public Position getEndPosition() {
-        return endPosition;
+    public Position getDestination() {
+        return destination;
     }
 
     public double getGlpChangeM3() {
@@ -65,7 +65,7 @@ public class VehicleAction {
         StringBuilder sb = new StringBuilder();
 
         switch (type) {
-            case DRIVING:
+            case DRIVE:
                 String pathLength = (path != null) ? String.format("| %d nodes", path.size()) : "";
                 String distanceKm = (path != null && path.size() > 1)
                         ? String.format("| %04d km", (path.size() - 1) * Constants.NODE_DISTANCE)
@@ -74,20 +74,20 @@ public class VehicleAction {
                         : "";
 
                 sb.append(String.format("🚗  DRIVING     | To: %-15s | Time: %3d min %s %s %s",
-                        endPosition, duration.toMinutes(), pathLength, distanceKm, fuelInfo));
+                        destination, duration.toMinutes(), pathLength, distanceKm, fuelInfo));
                 break;
 
-            case REFUELING:
+            case REFUEL:
                 sb.append(String.format("⛽  REFUELING   | Location: %-10s | Time: %3d min | Full tank restored",
-                        endPosition, duration.toMinutes()));
+                        destination, duration.toMinutes()));
                 break;
 
-            case REFILLING:
+            case RELOAD:
                 sb.append(String.format("🛢️  REFILLING   | Location: %-10s | Time: %3d min | GLP: +%d m³",
-                        endPosition, duration.toMinutes(), glpChangeM3));
+                        destination, duration.toMinutes(), glpChangeM3));
                 break;
 
-            case SERVING:
+            case SERVE:
                 String orderDetails = "";
                 if (order != null) {
                     orderDetails = String.format("| Client: %s | Due: %s",
@@ -96,27 +96,17 @@ public class VehicleAction {
                 }
 
                 sb.append(String.format("🛒  SERVING     | Location: %-10s | Time: %3d min | GLP: -%d m³ %s",
-                        endPosition, duration.toMinutes(), Math.abs(glpChangeM3), orderDetails));
+                        destination, duration.toMinutes(), Math.abs(glpChangeM3), orderDetails));
                 break;
 
             case MAINTENANCE:
                 sb.append(String.format("🔧  MAINTENANCE | Location: %-10s | Time: %3d min | Routine service",
-                        endPosition, duration.toMinutes()));
+                        destination, duration.toMinutes()));
                 break;
 
-            case IDLE:
+            case WAIT:
                 sb.append(String.format("⏸️  IDLE        | Location: %-10s | Time: %3d min | Waiting",
-                        endPosition, duration.toMinutes()));
-                break;
-
-            case STORAGE_CHECK:
-                sb.append(String.format("🔍  STORAGE CHK | Location: %-10s | Time: %3d min | Inventory verification",
-                        endPosition, duration.toMinutes()));
-                break;
-
-            case TRANSFERRING:
-                sb.append(String.format("🔄  TRANSFERRING| Location: %-10s | Time: %3d min | Resource transfer",
-                        endPosition, duration.toMinutes()));
+                        destination, duration.toMinutes()));
                 break;
         }
 

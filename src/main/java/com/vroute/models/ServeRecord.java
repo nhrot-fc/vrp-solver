@@ -6,13 +6,13 @@ public class ServeRecord {
     private final String vehicleId;
     private final String orderId;
     private final int servedGlpM3;
-    private final LocalDateTime serveDate;
+    private final LocalDateTime serveTime;
 
     public ServeRecord(String vehicleId, String orderId, int servedGlpM3, LocalDateTime serveDate) {
         this.vehicleId = vehicleId;
         this.orderId = orderId;
         this.servedGlpM3 = servedGlpM3;
-        this.serveDate = serveDate;
+        this.serveTime = serveDate;
     }
 
     public String getVehicleId() {
@@ -27,8 +27,8 @@ public class ServeRecord {
         return servedGlpM3;
     }
 
-    public LocalDateTime getServeDate() {
-        return serveDate;
+    public LocalDateTime getServeTime() {
+        return serveTime;
     }
 
     @Override
@@ -37,6 +37,6 @@ public class ServeRecord {
                 vehicleId, 
                 orderId,
                 servedGlpM3, 
-                serveDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")));
+                serveTime.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")));
     }
 }

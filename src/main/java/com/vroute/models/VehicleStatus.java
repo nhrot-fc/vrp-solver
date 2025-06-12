@@ -10,8 +10,7 @@ public enum VehicleStatus {
     SERVING("🛒"), // Vehicle is serving an order
     MAINTENANCE("🔧"), // Vehicle is undergoing maintenance
     REFUELING("⛽"), // Vehicle is refueling
-    REFILLING("🛢️"), // Vehicle is refilling GLP
-    TRANSFERRING("↔️"), // Vehicle is transferring GLP to/from another vehicle
+    RELOADING("🛢️"), // Vehicle is reloading GLP
     IDLE("⏸️"), // Vehicle is idle, waiting for next task
     UNAVAILABLE("🚫"); // Vehicle is not available for any task
     

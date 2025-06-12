@@ -59,39 +59,37 @@ import java.util.List;
  */
 public class VehiclePlanCreator {
 
-    private final Environment environment;
-    private final Depot mainDepot;
-
-    public VehiclePlanCreator(Environment environment) {
-        this.environment = environment;
-        this.mainDepot = environment.getMainDepot();
+    private VehiclePlanCreator() {
+        // Utility class with static methods only - prevent instantiation
     }
 
-    private LocalDateTime vehicleRefuel(Vehicle vehicle, Depot fuelDepot, LocalDateTime currentTime,
-            List<VehicleAction> actions) {
-        VehicleAction refuelAction = VehicleActionFactory.createRefuelingAction(fuelDepot, vehicle);
+    public static LocalDateTime vehicleRefuel(Vehicle vehicle, Depot fuelDepot, LocalDateTime currentTime,
+            List<Action> actions) {
+        Action refuelAction = ActionFactory.createRefuelingAction(fuelDepot, vehicle);
         actions.add(refuelAction);
         vehicle.refuel();
         return currentTime.plus(refuelAction.getDuration());
     }
 
-    private LocalDateTime vehicleRefill(Vehicle vehicle, Depot glpDepot, int glpAmountM3, LocalDateTime currentTime,
-            List<VehicleAction> actions) {
-        VehicleAction refillAction = VehicleActionFactory.createRefillingAction(glpDepot, glpAmountM3);
+    public static LocalDateTime vehicleRefill(Vehicle vehicle, Depot glpDepot, int glpAmountM3,
+            LocalDateTime currentTime,
+            List<Action> actions) {
+        Action refillAction = ActionFactory.createRefillingAction(glpDepot, glpAmountM3);
         actions.add(refillAction);
         vehicle.refill(glpAmountM3);
         return currentTime.plus(refillAction.getDuration());
     }
 
-    private double calculatePathDistance(List<Position> path) {
+    public static double calculatePathDistance(List<Position> path) {
         if (path == null || path.size() <= 1) {
             return 0.0;
         }
         return (path.size() - 1) * Constants.NODE_DISTANCE;
     }
 
-    private LocalDateTime driveToLocation(Vehicle vehicle, Position destination, LocalDateTime currentTime,
-            List<VehicleAction> actions) throws NoPathFoundException, InsufficientFuelException {
+    public static LocalDateTime driveToLocation(Environment environment, Vehicle vehicle, Position destination,
+            LocalDateTime currentTime,
+            List<Action> actions) throws NoPathFoundException, InsufficientFuelException {
         if (vehicle.getCurrentPosition().equals(destination)) {
             return currentTime;
         }
@@ -111,7 +109,7 @@ public class VehiclePlanCreator {
 
         Duration duration = Duration.ofMinutes((int) (distanceKm / Constants.VEHICLE_AVG_SPEED * 60.0));
 
-        VehicleAction drivingAction = VehicleActionFactory.createDrivingAction(path, duration, fuelConsumedGal);
+        Action drivingAction = ActionFactory.createDrivingAction(path, duration, fuelConsumedGal);
         actions.add(drivingAction);
 
         vehicle.setCurrentPosition(destination);
@@ -120,7 +118,8 @@ public class VehiclePlanCreator {
         return currentTime.plus(duration);
     }
 
-    private boolean canReach(Vehicle vehicle, Position destination, LocalDateTime currentTime) {
+    public static boolean canReach(Environment environment, Vehicle vehicle, Position destination,
+            LocalDateTime currentTime) {
         if (vehicle.getCurrentPosition().equals(destination)) {
             return true;
         }
@@ -136,14 +135,17 @@ public class VehiclePlanCreator {
         return vehicle.getCurrentFuelGal() > fuelConsumedGal + Constants.EPSILON;
     }
 
-    private LocalDateTime processFuelSupply(Vehicle vehicle, LocalDateTime currentTime, List<VehicleAction> actions) {
+    public static LocalDateTime processFuelSupply(Environment environment, Vehicle vehicle, LocalDateTime currentTime,
+            List<Action> actions) {
         try {
-            Depot fuelDepot = findNearestFuelDepot(environment.getAuxDepots(), vehicle.getCurrentPosition());
-            if (!canReach(vehicle, fuelDepot.getPosition(), currentTime)) {
+            Depot fuelDepot = findNearestFuelDepot(environment.getAuxDepots(), vehicle.getCurrentPosition(),
+                    environment.getMainDepot());
+            if (!canReach(environment, vehicle, fuelDepot.getPosition(), currentTime)) {
                 return null;
             }
 
-            LocalDateTime updatedTime = driveToLocation(vehicle, fuelDepot.getPosition(), currentTime, actions);
+            LocalDateTime updatedTime = driveToLocation(environment, vehicle, fuelDepot.getPosition(), currentTime,
+                    actions);
             updatedTime = vehicleRefuel(vehicle, fuelDepot, updatedTime, actions);
 
             return updatedTime;
@@ -153,29 +155,30 @@ public class VehiclePlanCreator {
         }
     }
 
-    private LocalDateTime processGlpSupply(Vehicle vehicle, int glpRequired,
-            LocalDateTime currentTime,
-            List<VehicleAction> actions) {
+    public static LocalDateTime processGlpSupply(Environment environment, Vehicle vehicle, int glpRequired,
+            LocalDateTime currentTime, List<Action> actions) {
         try {
-            Depot glpDepot = findNearestGLPDepot(environment.getAuxDepots(), vehicle.getCurrentPosition(), glpRequired);
+            Depot glpDepot = findNearestGLPDepot(environment.getAuxDepots(), vehicle.getCurrentPosition(), glpRequired,
+                    environment.getMainDepot());
 
-            if (canReach(vehicle, glpDepot.getPosition(), currentTime)) {
-                currentTime = driveToLocation(vehicle, glpDepot.getPosition(), currentTime, actions);
+            if (canReach(environment, vehicle, glpDepot.getPosition(), currentTime)) {
+                currentTime = driveToLocation(environment, vehicle, glpDepot.getPosition(), currentTime, actions);
                 currentTime = vehicleRefill(vehicle, glpDepot, glpRequired, currentTime, actions);
             } else {
-                Depot fuelDepot = findNearestFuelDepot(environment.getAuxDepots(), vehicle.getCurrentPosition());
-                if (!canReach(vehicle, fuelDepot.getPosition(), currentTime)) {
+                Depot fuelDepot = findNearestFuelDepot(environment.getAuxDepots(), vehicle.getCurrentPosition(),
+                        environment.getMainDepot());
+                if (!canReach(environment, vehicle, fuelDepot.getPosition(), currentTime)) {
                     return null;
                 }
 
-                currentTime = driveToLocation(vehicle, fuelDepot.getPosition(), currentTime, actions);
+                currentTime = driveToLocation(environment, vehicle, fuelDepot.getPosition(), currentTime, actions);
                 currentTime = vehicleRefuel(vehicle, fuelDepot, currentTime, actions);
 
-                if (!canReach(vehicle, glpDepot.getPosition(), currentTime)) {
+                if (!canReach(environment, vehicle, glpDepot.getPosition(), currentTime)) {
                     return null;
                 }
 
-                currentTime = driveToLocation(vehicle, glpDepot.getPosition(), currentTime, actions);
+                currentTime = driveToLocation(environment, vehicle, glpDepot.getPosition(), currentTime, actions);
                 currentTime = vehicleRefill(vehicle, glpDepot, glpRequired, currentTime, actions);
             }
 
@@ -190,12 +193,14 @@ public class VehiclePlanCreator {
         }
     }
 
-    public VehiclePlan createPlan(Vehicle vehicle, List<DeliveryInstruction> instructions,
-            LocalDateTime planStartTime) {
+    public static VehiclePlan createPlan(Environment environment, Vehicle vehicle,
+            List<DeliveryInstruction> instructions) {
         try {
             Vehicle currentVehicle = vehicle.clone();
+            LocalDateTime planStartTime = environment.getCurrentTime();
             LocalDateTime currentTime = planStartTime;
-            List<VehicleAction> actions = new ArrayList<>();
+            List<Action> actions = new ArrayList<>();
+            Depot mainDepot = environment.getMainDepot();
 
             for (int i = 0; i < instructions.size(); i++) {
                 DeliveryInstruction inst = instructions.get(i);
@@ -217,28 +222,29 @@ public class VehiclePlanCreator {
                 int glpNeeded = currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3();
 
                 if (currentVehicle.getCurrentGlpM3() < glpNeeded) {
-                    LocalDateTime updatedTime = processGlpSupply(currentVehicle, glpNeeded, currentTime, actions);
+                    LocalDateTime updatedTime = processGlpSupply(environment, currentVehicle, glpNeeded, currentTime,
+                            actions);
                     if (updatedTime == null) {
                         return null;
                     }
                     currentTime = updatedTime;
                 }
 
-                if (!canReach(currentVehicle, orderPos, currentTime)) {
-                    LocalDateTime updatedTime = processFuelSupply(currentVehicle, currentTime, actions);
+                if (!canReach(environment, currentVehicle, orderPos, currentTime)) {
+                    LocalDateTime updatedTime = processFuelSupply(environment, currentVehicle, currentTime, actions);
                     if (updatedTime == null) {
                         return null;
                     }
                     currentTime = updatedTime;
 
-                    if (!canReach(currentVehicle, orderPos, currentTime)) {
+                    if (!canReach(environment, currentVehicle, orderPos, currentTime)) {
                         return null;
                     }
                 }
 
-                currentTime = driveToLocation(currentVehicle, orderPos, currentTime, actions);
+                currentTime = driveToLocation(environment, currentVehicle, orderPos, currentTime, actions);
 
-                VehicleAction servingAction = VehicleActionFactory.createServingAction(
+                Action servingAction = ActionFactory.createServingAction(
                         orderPos,
                         order,
                         inst.getGlpAmountToDeliver());
@@ -249,22 +255,22 @@ public class VehiclePlanCreator {
             }
 
             if (!instructions.isEmpty()) {
-                Position mainDepotPos = this.mainDepot.getPosition();
+                Position mainDepotPos = mainDepot.getPosition();
 
-                if (!canReach(currentVehicle, mainDepotPos, currentTime)) {
-                    LocalDateTime updatedTime = processFuelSupply(currentVehicle, currentTime, actions);
+                if (!canReach(environment, currentVehicle, mainDepotPos, currentTime)) {
+                    LocalDateTime updatedTime = processFuelSupply(environment, currentVehicle, currentTime, actions);
                     if (updatedTime == null) {
                         return null;
                     }
                     currentTime = updatedTime;
 
-                    if (!canReach(currentVehicle, mainDepotPos, currentTime)) {
+                    if (!canReach(environment, currentVehicle, mainDepotPos, currentTime)) {
                         return null;
                     }
                 }
 
-                currentTime = driveToLocation(currentVehicle, mainDepotPos, currentTime, actions);
-                VehicleAction maintenanceAction = VehicleActionFactory.createMaintenanceAction(
+                currentTime = driveToLocation(environment, currentVehicle, mainDepotPos, currentTime, actions);
+                Action maintenanceAction = ActionFactory.createMaintenanceAction(
                         mainDepotPos,
                         Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES));
                 actions.add(maintenanceAction);
@@ -279,20 +285,21 @@ public class VehiclePlanCreator {
         }
     }
 
-    private Depot findNearestGLPDepot(List<Depot> depots, Position currentPosition, int glpNeeded) {
+    public static Depot findNearestGLPDepot(List<Depot> depots, Position currentPosition, int glpNeeded,
+            Depot mainDepot) {
         final double effectiveGlpNeeded = Math.max(glpNeeded, Constants.EPSILON);
         return depots.stream()
                 .filter(depot -> depot.getCurrentGlpM3() >= effectiveGlpNeeded)
                 .min((d1, d2) -> Double.compare(currentPosition.distanceTo(d1.getPosition()),
                         currentPosition.distanceTo(d2.getPosition())))
-                .orElse(this.mainDepot);
+                .orElse(mainDepot);
     }
 
-    private Depot findNearestFuelDepot(List<Depot> depots, Position currentPosition) {
+    public static Depot findNearestFuelDepot(List<Depot> depots, Position currentPosition, Depot mainDepot) {
         return depots.stream()
                 .filter(Depot::canRefuel)
                 .min((d1, d2) -> Double.compare(currentPosition.distanceTo(d1.getPosition()),
                         currentPosition.distanceTo(d2.getPosition())))
-                .orElse(this.mainDepot);
+                .orElse(mainDepot);
     }
 }
