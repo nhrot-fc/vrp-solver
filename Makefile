@@ -19,6 +19,7 @@ MAIN_CLASS = com.vroute.Main
 SIMULATION_CLASS = com.vroute.SimulationLauncher
 ROUTING_CLASS = com.vroute.RoutingApplication
 API_SERVICE_CLASS = com.vroute.api.ApiServiceLauncher
+BLOQUEO_DEMO_CLASS = com.vroute.ui.BloqueoDemo
 
 # Regla por defecto
 all: compile
@@ -28,7 +29,7 @@ compile:
 	@echo "Creando directorio de salida: $(BIN_DIR)..."
 	@mkdir -p $(BIN_DIR)
 	@echo "Compilando con JavaFX..."
-	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/Main.java $(SRC_ROOT)/com/vroute/SimulationLauncher.java $(SRC_ROOT)/com/vroute/api/ApiServiceLauncher.java
+	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/Main.java
 	@echo "Compilación finalizada."
 
 # Regla para ejecutar la aplicación principal
@@ -36,20 +37,14 @@ run: compile
 	@echo "Ejecutando $(MAIN_CLASS) con JavaFX..."
 	java --module-path $(LIB_DIR) --add-modules javafx.controls,javafx.fxml -cp $(BIN_DIR):$(JAVAFX_JARS) $(MAIN_CLASS)
 
-# Regla para ejecutar el simulador con visualización
-run-simulation: compile
-	@echo "Ejecutando $(SIMULATION_CLASS) con JavaFX..."
-	java --module-path $(LIB_DIR) --add-modules javafx.controls,javafx.fxml -cp $(BIN_DIR):$(JAVAFX_JARS) $(SIMULATION_CLASS)
-
-# Regla para ejecutar el servicio API
-run-api: compile
-	@echo "Ejecutando $(API_SERVICE_CLASS) - Servidor HTTP API..."
-	java -cp $(BIN_DIR) $(API_SERVICE_CLASS)
-
-# Regla para ejecutar el servicio API en un puerto específico
-run-api-port: compile
-	@echo "Ejecutando $(API_SERVICE_CLASS) en puerto $(PORT)..."
-	java -cp $(BIN_DIR) $(API_SERVICE_CLASS) $(PORT)
+# Regla para ejecutar la demo de bloqueos reales
+run-bloqueos:
+	@echo "Creando directorio de salida: $(BIN_DIR)..."
+	@mkdir -p $(BIN_DIR)
+	@echo "Compilando la demo de bloqueos y el módulo de pathfinding..."
+	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/ui/BloqueoDemo.java
+	@echo "Ejecutando $(BLOQUEO_DEMO_CLASS)..."
+	java -cp $(BIN_DIR) $(BLOQUEO_DEMO_CLASS)
 
 # Regla para limpiar los archivos generados
 clean:
@@ -57,4 +52,4 @@ clean:
 	@rm -rf $(BIN_DIR)
 	@echo "Limpieza finalizada."
 
-.PHONY: all compile run run-simulation run-api run-api-port clean
+.PHONY: all compile run run-simulation run-api run-api-port run-visualizer run-bloqueos run-bloqueos-debug clean
