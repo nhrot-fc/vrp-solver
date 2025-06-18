@@ -21,8 +21,8 @@ public class MetaheuristicAssignator implements Assignator {
 
     // Hyperparameters for the metaheuristic algorithm
     private static final int DEFAULT_MAX_ITERATIONS = 3000;
-    private static final int DEFAULT_TABU_LIST_SIZE = 30;
-    private static final int DEFAULT_NUM_NEIGHBORS = 100;
+    private static final int DEFAULT_TABU_LIST_SIZE = 25;
+    private static final int DEFAULT_NUM_NEIGHBORS = 200;
     private static final double DUE_DATE_PENALTY_WEIGHT = 2.0;
     private static final int MAX_MINUTES_EARLY_BONUS = 30;
     private static final double LATE_PENALTY_EXPONENT = 1.5;

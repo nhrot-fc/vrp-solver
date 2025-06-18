@@ -56,6 +56,9 @@ public class SimulationApp extends Application {
     // Simulation speed (milliseconds between steps)
     private int simulationSpeed = 500;
 
+    // event list
+    private List<Event> eventList = new ArrayList<>();
+
     @Override
     public void start(Stage primaryStage) {
         // Initialize the data reader
@@ -64,10 +67,12 @@ public class SimulationApp extends Application {
         // Initialize simulation environment with starting date
         LocalDateTime simulationStartTime = LocalDateTime.of(2025, 1, 1, 0, 0, 0);
         initializeEnvironment(simulationStartTime);
+        // Load data from files (after UI is initialized)
+        loadDataFromFiles(simulationStartTime);
 
         // Initialize the orchestrator
         orchestrator = new Orchestrator(environment);
-
+        orchestrator.addEvents(eventList);
         // Create UI first
         BorderPane root = createUI();
 
@@ -79,9 +84,6 @@ public class SimulationApp extends Application {
 
         // Update time display
         updateTimeDisplay();
-
-        // Load data from files (after UI is initialized)
-        loadDataFromFiles(simulationStartTime);
 
         // Initial draw of the environment
         drawEnvironment();
@@ -158,7 +160,7 @@ public class SimulationApp extends Application {
         Button stopButton = new Button("Stop");
         stopButton.setOnAction(e -> stopSimulation());
 
-        Slider speedSlider = new Slider(0.1, 2.0, 1.0);
+        Slider speedSlider = new Slider(0.5, 10.0, 0.5);
         speedSlider.setShowTickMarks(true);
         speedSlider.setShowTickLabels(true);
         speedSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -206,7 +208,7 @@ public class SimulationApp extends Application {
                 }
                 
                 // Add events to orchestrator
-                orchestrator.addEvents(orderEvents);
+                eventList.addAll(orderEvents);
                 updateStatus("Created " + orders.size() + " order arrival events");
                 logger.info("Loaded " + orders.size() + " orders from " + ordersFile.getPath());
             } else {
@@ -236,7 +238,8 @@ public class SimulationApp extends Application {
                 }
                 
                 // Add events to orchestrator
-                orchestrator.addEvents(blockageEvents);
+                //eventList.addAll(blockageEvents);
+                //environment.addBlockages(blockages);
                 updateStatus("Created " + (blockages.size() * 2) + " blockage events for " + blockages.size() + " blockages");
                 logger.info("Loaded " + blockages.size() + " blockages from " + blockagesFile.getPath());
             } else {
@@ -262,7 +265,7 @@ public class SimulationApp extends Application {
                 }
                 
                 // Add events to orchestrator
-                orchestrator.addEvents(maintenanceEvents);
+                eventList.addAll(maintenanceEvents);
                 updateStatus("Created " + (tasks.size() * 2) + " maintenance events for " + tasks.size() + " tasks");
                 logger.info("Loaded " + tasks.size() + " maintenance tasks from " + maintenanceFile.getPath());
             } else {
@@ -317,10 +320,6 @@ public class SimulationApp extends Application {
         if (orchestrator.getVehiclePlans().isEmpty()) {
             updateStatus("Running initial planning...");
             try {
-                // Set the ticks per replan value - replan approximately every minute (60 simulation steps)
-                orchestrator.setTicksPerReplan(60);
-                
-                // Run assignation and make sure it completes
                 orchestrator.initialize(); // Make sure the orchestrator is initialized
             } catch (Exception e) {
                 updateStatus("Error during planning: " + e.getMessage());

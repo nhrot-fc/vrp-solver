@@ -51,12 +51,12 @@ public class ApiServiceLauncher {
         // Create environment with sample data
         createEnvironment();
         
+        // Load sample data
+        loadSampleData();
+
         // Create orchestrator
         orchestrator = new Orchestrator(environment);
         orchestrator.initialize();
-        
-        // Load sample data
-        loadSampleData();
         
         // Create API server
         apiServer = new ApiServer(environment, orchestrator, port);
@@ -139,68 +139,13 @@ public class ApiServiceLauncher {
     
     private void loadSampleData() {
         LocalDateTime currentTime = environment.getCurrentTime();
-        
-        // Load sample orders
-        createSampleOrders(currentTime);
-        
-        // Load sample blockages
-        createSampleBlockages(currentTime);
-        
         // Try to load data from files if available
         tryLoadDataFromFiles(currentTime);
         
         logger.info("Sample data loaded: " + environment.getOrderQueue().size() + " orders, " + 
                    environment.getActiveBlockages().size() + " blockages");
     }
-    
-    private void createSampleOrders(LocalDateTime currentTime) {
-        List<Order> orders = new ArrayList<>();
-        
-        // Create some sample orders with different priorities and locations
-        orders.add(new Order("ORDER_001", currentTime.plusMinutes(30), currentTime.plusHours(4), 15, new Position(25, 15)));
-        orders.add(new Order("ORDER_002", currentTime.plusMinutes(45), currentTime.plusHours(6), 8, new Position(35, 25)));
-        orders.add(new Order("ORDER_003", currentTime.plusHours(1), currentTime.plusHours(8), 12, new Position(45, 35)));
-        orders.add(new Order("ORDER_004", currentTime.plusMinutes(15), currentTime.plusHours(2), 20, new Position(15, 20))); // High priority
-        orders.add(new Order("ORDER_005", currentTime.plusHours(2), currentTime.plusHours(12), 5, new Position(55, 10)));
-        orders.add(new Order("ORDER_006", currentTime.plusMinutes(90), currentTime.plusHours(5), 18, new Position(30, 40)));
-        orders.add(new Order("ORDER_007", currentTime.plusHours(3), currentTime.plusHours(15), 7, new Position(60, 30)));
-        orders.add(new Order("ORDER_008", currentTime.plusMinutes(20), currentTime.plusHours(3), 25, new Position(20, 35))); // Large order
-        
-        for (Order order : orders) {
-            environment.addOrder(order);
-        }
-    }
-    
-    private void createSampleBlockages(LocalDateTime currentTime) {
-        List<Blockage> blockages = new ArrayList<>();
-        
-        // Create horizontal blockage
-        List<Position> horizontalPoints = new ArrayList<>();
-        for (int x = 30; x <= 35; x++) {
-            horizontalPoints.add(new Position(x, 20));
-        }
-        blockages.add(new Blockage(currentTime.plusMinutes(30), currentTime.plusHours(4), horizontalPoints));
-        
-        // Create vertical blockage
-        List<Position> verticalPoints = new ArrayList<>();
-        for (int y = 25; y <= 30; y++) {
-            verticalPoints.add(new Position(40, y));
-        }
-        blockages.add(new Blockage(currentTime.plusHours(1), currentTime.plusHours(6), verticalPoints));
-        
-        // Create diagonal-like blockage
-        List<Position> diagonalPoints = new ArrayList<>();
-        diagonalPoints.add(new Position(50, 15));
-        diagonalPoints.add(new Position(51, 15));
-        diagonalPoints.add(new Position(51, 16));
-        diagonalPoints.add(new Position(52, 16));
-        blockages.add(new Blockage(currentTime.plusHours(2), currentTime.plusHours(8), diagonalPoints));
-        
-        for (Blockage blockage : blockages) {
-            environment.addBlockage(blockage);
-        }
-    }
-    
+
     private void tryLoadDataFromFiles(LocalDateTime currentTime) {
         try {
             // Try to load orders from file
@@ -232,10 +177,6 @@ public class ApiServiceLauncher {
         // Start API server
         apiServer.start();
         
-        // Run initial assignation
-        logger.info("Running initial vehicle assignation...");
-        orchestrator.runAssignation();
-        
         // Start a background thread to periodically update the simulation
         Thread simulationThread = new Thread(this::runSimulationLoop);
         simulationThread.setDaemon(true);
@@ -250,8 +191,8 @@ public class ApiServiceLauncher {
     private void runSimulationLoop() {
         try {
             while (true) {
-                // Run a simulation step every 30 seconds
-                Thread.sleep(30000);
+                // Run a simulation step every 0.5 seconds
+                Thread.sleep(500);
                 
                 boolean continueSimulation = orchestrator.runSimulationStep();
                 if (!continueSimulation) {
@@ -279,5 +220,6 @@ public class ApiServiceLauncher {
         System.out.println("Press Enter to stop the service...");
         scanner.nextLine();
         stop();
+        scanner.close();
     }
 }

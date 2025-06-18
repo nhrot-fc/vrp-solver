@@ -109,7 +109,8 @@ public class VehiclePlanCreator {
 
         Duration duration = Duration.ofMinutes((int) (distanceKm / Constants.VEHICLE_AVG_SPEED * 60.0));
 
-        Action drivingAction = ActionFactory.createDrivingAction(path, fuelConsumedGal, currentTime, currentTime.plus(duration));
+        Action drivingAction = ActionFactory.createDrivingAction(path, fuelConsumedGal, currentTime,
+                currentTime.plus(duration));
         actions.add(drivingAction);
 
         vehicle.setCurrentPosition(destination);
@@ -202,6 +203,12 @@ public class VehiclePlanCreator {
             List<Action> actions = new ArrayList<>();
             Depot mainDepot = environment.getMainDepot();
 
+            Action maintenanceAction = ActionFactory.createMaintenanceAction(
+                    mainDepot.getPosition(),
+                    Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES),
+                    currentTime);
+            actions.add(maintenanceAction);
+
             for (int i = 0; i < instructions.size(); i++) {
                 DeliveryInstruction inst = instructions.get(i);
                 Order order = inst.getOriginalOrder().clone();
@@ -258,13 +265,6 @@ public class VehiclePlanCreator {
                 }
 
                 currentTime = driveToLocation(environment, currentVehicle, mainDepotPos, currentTime, actions);
-                Action maintenanceAction = ActionFactory.createMaintenanceAction(
-                        mainDepotPos,
-                        Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES),
-                        currentTime);
-                actions.add(maintenanceAction);
-
-                currentTime = currentTime.plus(maintenanceAction.getDuration());
             }
 
             return new VehiclePlan(currentVehicle, actions, planStartTime);
@@ -272,6 +272,65 @@ public class VehiclePlanCreator {
             System.err.println("Failed to create plan: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Creates a plan to send a vehicle to the main depot.
+     * This is used as a default plan when a vehicle has no assigned deliveries.
+     * 
+     * @param environment The current environment
+     * @param vehicle     The vehicle to plan for
+     * @return A VehiclePlan to send the vehicle to the main depot, or null if a
+     *         path cannot be found
+     */
+    public static VehiclePlan createPlanToMainDepot(Environment environment, Vehicle vehicle) {
+        try {
+            Vehicle currentVehicle = vehicle.clone();
+            LocalDateTime planStartTime = environment.getCurrentTime();
+            List<Action> actions = new ArrayList<>();
+            Depot mainDepot = environment.getMainDepot();
+
+            // Return to main depot
+            if (!currentVehicle.getCurrentPosition().equals(mainDepot.getPosition())) {
+                // Only create a plan if the vehicle is not already at the main depot
+                LocalDateTime currentTime = planStartTime;
+
+                // Check if we need to refuel first
+                double distanceToMainDepot = currentVehicle.getCurrentPosition().distanceTo(mainDepot.getPosition());
+                double fuelNeeded = currentVehicle.calculateFuelNeeded(distanceToMainDepot);
+
+                if (fuelNeeded > currentVehicle.getCurrentFuelGal()) {
+                    // Need to refuel first - find the nearest fuel depot
+                    Depot fuelDepot = findNearestFuelDepot(environment.getAuxDepots(),
+                            currentVehicle.getCurrentPosition(), mainDepot);
+
+                    // If we can reach the fuel depot
+                    if (canReach(environment, currentVehicle, fuelDepot.getPosition(), currentTime)) {
+                        currentTime = driveToLocation(environment, currentVehicle, fuelDepot.getPosition(), currentTime,
+                                actions);
+                        currentTime = vehicleRefuel(currentVehicle, fuelDepot, currentTime, actions);
+                    } else {
+                        System.err.println("Vehicle " + vehicle.getId() + " cannot reach any fuel depot to refuel.");
+                        return null;
+                    }
+                }
+
+                // Now drive to main depot
+                if (canReach(environment, currentVehicle, mainDepot.getPosition(), currentTime)) {
+                    currentTime = driveToLocation(environment, currentVehicle, mainDepot.getPosition(), currentTime,
+                            actions);
+                } else {
+                    System.err.println("Vehicle " + vehicle.getId() + " cannot reach main depot even after refueling.");
+                    return null;
+                }
+
+                return new VehiclePlan(currentVehicle, actions, planStartTime);
+            }
+        } catch (NoPathFoundException | InsufficientFuelException e) {
+            System.err.println("Failed to create plan to main depot: " + e.getMessage());
+            return null;
+        }
+        return null;
     }
 
     public static Depot findNearestGLPDepot(List<Depot> depots, Position currentPosition, int glpNeeded,

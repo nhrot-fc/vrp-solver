@@ -9,14 +9,15 @@ import java.util.*;
 public class PathFinder {
     private static final double EDGE_WEIGHT_KM = Constants.NODE_DISTANCE;
     private static final double VEHICLE_SPEED_KMPH = Constants.VEHICLE_AVG_SPEED;
-    private static final double TIME_PER_EDGE_HOURS = EDGE_WEIGHT_KM / VEHICLE_SPEED_KMPH;
-    
+    private static final double TIME_PER_EDGE_SECONDS = 3600 * EDGE_WEIGHT_KM / VEHICLE_SPEED_KMPH;
+
     // Private constructor to prevent instantiation
     private PathFinder() {
         // This class should not be instantiated
     }
 
-    public static List<Position> findPath(Environment environment, Position startPos, Position endPos, LocalDateTime startTime) {
+    public static List<Position> findPath(Environment environment, Position startPos, Position endPos,
+            LocalDateTime startTime) {
         Grid grid = environment.getGrid();
         Node startNode = grid.getNode(startPos.getX(), startPos.getY());
         Node endNode = grid.getNode(endPos.getX(), endPos.getY());
@@ -24,7 +25,7 @@ public class PathFinder {
         if (startNode == null || endNode == null) {
             return new ArrayList<>();
         }
-        
+
         if (environment.isNodeBlocked(startPos, startTime) || environment.isNodeBlocked(endPos, startTime)) {
             return new ArrayList<>();
         }
@@ -40,7 +41,7 @@ public class PathFinder {
 
         startNode.gCost = 0;
         startNode.hCost = calculateHeuristic(startNode, endNode);
-        startNode.timeAtNode = startTime; 
+        startNode.timeAtNode = startTime;
         startNode.calculateFCost();
         openSet.add(startNode);
 
@@ -58,17 +59,14 @@ public class PathFinder {
                     continue;
                 }
 
-                long timeToNeighborNanos = (long) (TIME_PER_EDGE_HOURS * 3600 * 1_000_000_000L);
-                LocalDateTime timeAtNeighbor = currentNode.timeAtNode.plusNanos(timeToNeighborNanos);
-                
-                // Check if the neighbor node is blocked
-                if (environment.isNodeBlocked(neighbor.position, timeAtNeighbor) || 
-                    environment.isPathBlocked(currentNode.position, neighbor.position, timeAtNeighbor)) {
+                LocalDateTime timeAtNeighbor = currentNode.timeAtNode.plusSeconds((long) TIME_PER_EDGE_SECONDS);
+                if (environment.isNodeBlocked(neighbor.position, timeAtNeighbor) ||
+                        environment.isPathBlocked(currentNode.position, neighbor.position, timeAtNeighbor)) {
                     continue;
                 }
 
                 double tentativeGCost = currentNode.gCost + EDGE_WEIGHT_KM;
-                
+
                 if (tentativeGCost < neighbor.gCost) {
                     neighbor.parent = currentNode;
                     neighbor.gCost = tentativeGCost;

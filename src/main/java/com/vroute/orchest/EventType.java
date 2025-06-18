@@ -8,6 +8,5 @@ public enum EventType {
     MAINTENANCE_START, // Vehicle maintenance begins
     MAINTENANCE_END, // Vehicle maintenance ends
     GLP_DEPOT_REFILL, // GLP depot gets refilled
-    PLAN_CHECKPOINT, // Regular checkpoint for plan verification
     SIMULATION_END // End of simulation
 }

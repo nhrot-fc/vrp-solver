@@ -117,8 +117,8 @@ public class Environment {
 
     public List<Blockage> getActiveBlockagesAt(LocalDateTime dateTime) {
         return activeBlockages.stream()
-                              .filter(b -> b.isActiveAt(dateTime))
-                              .collect(Collectors.toList());
+                .filter(b -> b.isActiveAt(dateTime))
+                .collect(Collectors.toList());
     }
 
     public boolean isNodeBlocked(Position position, LocalDateTime dateTime) {
@@ -138,7 +138,7 @@ public class Environment {
         if (isNodeBlocked(from, dateTime) || isNodeBlocked(to, dateTime)) {
             return true;
         }
-        
+
         for (Blockage blockage : getActiveBlockagesAt(dateTime)) {
             // Check if the direct path segment (from-to) is part of this specific blockage
             List<Position> blockagePoints = blockage.getBlockagePoints();
@@ -236,8 +236,14 @@ public class Environment {
 
     public List<Vehicle> getAvailableVehicles() {
         return vehicles.stream()
-                .filter(vehicle -> vehicle.getStatus() == VehicleStatus.AVAILABLE)
+                .filter(vehicle -> vehicle.getStatus() == VehicleStatus.AVAILABLE ||
+                        vehicle.getStatus() == VehicleStatus.IDLE ||
+                        vehicle.getStatus() == VehicleStatus.DRIVING)
                 .collect(Collectors.toList());
+    }
+
+    public void clearAllOrders() {
+        orderQueue.clear();
     }
 
     @Override

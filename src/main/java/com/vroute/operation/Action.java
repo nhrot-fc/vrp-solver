@@ -85,9 +85,9 @@ public class Action {
         boolean actionCompleted = !currentTime.isBefore(expectedEndTime);
         double progressRatio = calculateProgressRatio(currentTime);
 
-        System.out.println(
-                String.format("Executing action: %s | Progress: %.2f%% | Time: %s",
-                        this, progressRatio * 100, currentTime));
+        // System.out.println(
+        //         String.format("Executing action: %s | Progress: %.2f%% | Time: %s",
+        //                 this, progressRatio * 100, currentTime));
         switch (type) {
             case DRIVE:
                 if (path != null && path.size() > 1) {
