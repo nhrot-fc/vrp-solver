@@ -24,7 +24,7 @@ public class DepositoRenderer implements Renderer<Deposito> {
     
     @Override
     public void renderizar(Graphics2D g2d, Deposito deposito, MapTransformation transformation) {
-        Posicion posicion = deposito.getUbicacion();
+        Posicion posicion = deposito.getPosicion();
         Point punto = transformation.transformCoordsToScreen(posicion);
         
         int tamano = deposito.esPlantaPrincipal() ? TAMANO_PLANTA : TAMANO_DEPOSITO;

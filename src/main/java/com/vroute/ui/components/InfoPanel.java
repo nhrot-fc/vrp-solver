@@ -63,7 +63,7 @@ public class InfoPanel extends JPanel {
         StringBuilder sb = new StringBuilder();
         sb.append("ID: ").append(vehiculo.getId()).append("\n");
         sb.append("Tipo: ").append(vehiculo.getTipo().getNombre()).append("\n");
-        sb.append("Estado: ").append(vehiculo.getEstadoOperativo()).append("\n");
+        sb.append("Estado: ").append(vehiculo.getEstado()).append("\n");
         sb.append("Posición: (").append(vehiculo.getPosicionActual().getX())
           .append(", ").append(vehiculo.getPosicionActual().getY()).append(")\n\n");
           
@@ -90,8 +90,8 @@ public class InfoPanel extends JPanel {
         StringBuilder sb = new StringBuilder();
         sb.append("ID: ").append(pedido.getId()).append("\n");
         sb.append("Estado: ").append(pedido.getEstado()).append("\n");
-        sb.append("Ubicación: (").append(pedido.getUbicacion().getX())
-          .append(", ").append(pedido.getUbicacion().getY()).append(")\n\n");
+        sb.append("Ubicación: (").append(pedido.getPosicion().getX())
+          .append(", ").append(pedido.getPosicion().getY()).append(")\n\n");
           
         sb.append("GLP Solicitado: ").append(pedido.getCantidadTotalGLP()).append(" m³\n");
         sb.append("GLP Entregado: ").append(pedido.getCantidadSatisfechaGLP()).append(" m³\n\n");
@@ -113,8 +113,8 @@ public class InfoPanel extends JPanel {
         StringBuilder sb = new StringBuilder();
         sb.append("ID: ").append(deposito.getId()).append("\n");
         sb.append("Tipo: ").append(deposito.esPlantaPrincipal() ? "Planta Principal" : "Depósito Secundario").append("\n");
-        sb.append("Ubicación: (").append(deposito.getUbicacion().getX())
-          .append(", ").append(deposito.getUbicacion().getY()).append(")\n\n");
+        sb.append("Ubicación: (").append(deposito.getPosicion().getX())
+          .append(", ").append(deposito.getPosicion().getY()).append(")\n\n");
           
         sb.append("Capacidad GLP: ");
         if (deposito.esPlantaPrincipal()) {

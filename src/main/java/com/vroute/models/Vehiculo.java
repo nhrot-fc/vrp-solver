@@ -1,7 +1,7 @@
 package com.vroute.models;
 
 public class Vehiculo {
-    public enum EstadoOperativo {
+    public enum Estado {
         DISPONIBLE,
         EN_RUTA,
         EN_MANTENIMIENTO,
@@ -13,15 +13,15 @@ public class Vehiculo {
     private Posicion posicionActual;
     private int cargaGLPActual;
     private double nivelCombustibleActual;
-    private EstadoOperativo estadoOperativo;
+    private Estado estado;
 
-    public Vehiculo(String id, TipoVehiculo tipo, Posicion posicionActual, int cargaGLPActual, double nivelCombustibleActual, EstadoOperativo estadoOperativo) {
+    public Vehiculo(String id, TipoVehiculo tipo, Posicion posicionActual, int cargaGLPActual, double nivelCombustibleActual, Estado estado) {
         this.id = id;
         this.tipo = tipo;
         this.posicionActual = posicionActual;
         this.cargaGLPActual = cargaGLPActual;
         this.nivelCombustibleActual = nivelCombustibleActual;
-        this.estadoOperativo = estadoOperativo;
+        this.estado = estado;
     }
 
     public String getId() {
@@ -44,7 +44,7 @@ public class Vehiculo {
         return nivelCombustibleActual;
     }
 
-    public EstadoOperativo getEstadoOperativo() {
-        return estadoOperativo;
+    public Estado getEstado() {
+        return estado;
     }
 }

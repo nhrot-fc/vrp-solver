@@ -11,16 +11,17 @@ public class Pedido {
     }
 
     private String id;
-    private Posicion ubicacion;
+    private Posicion posicion;
     private int cantidadTotalGLP;
     private LocalDateTime horaRecepcion;
     private LocalDateTime horaLimite;
     private int cantidadSatisfechaGLP;
     private Estado estado;
 
-    public Pedido(String id, Posicion ubicacion, int cantidadTotalGLP, LocalDateTime horaRecepcion, LocalDateTime horaLimite, int cantidadSatisfechaGLP, Estado estado) {
+    public Pedido(String id, Posicion ubicacion, int cantidadTotalGLP, LocalDateTime horaRecepcion,
+            LocalDateTime horaLimite, int cantidadSatisfechaGLP, Estado estado) {
         this.id = id;
-        this.ubicacion = ubicacion;
+        this.posicion = ubicacion;
         this.cantidadTotalGLP = cantidadTotalGLP;
         this.horaRecepcion = horaRecepcion;
         this.horaLimite = horaLimite;
@@ -32,8 +33,8 @@ public class Pedido {
         return id;
     }
 
-    public Posicion getUbicacion() {
-        return ubicacion;
+    public Posicion getPosicion() {
+        return posicion;
     }
 
     public int getCantidadTotalGLP() {

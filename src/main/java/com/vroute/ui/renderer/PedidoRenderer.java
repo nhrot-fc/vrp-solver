@@ -24,7 +24,7 @@ public class PedidoRenderer implements Renderer<Pedido> {
     
     @Override
     public void renderizar(Graphics2D g2d, Pedido pedido, MapTransformation transformation) {
-        Posicion posicion = pedido.getUbicacion();
+        Posicion posicion = pedido.getPosicion();
         Point punto = transformation.transformCoordsToScreen(posicion);
         
         // Determinar el tamaño basado en la cantidad de GLP pedida

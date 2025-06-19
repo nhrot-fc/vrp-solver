@@ -15,10 +15,9 @@ LIB_DIR = lib
 JAVAFX_JARS = $(shell find $(LIB_DIR) -name '*.jar' | tr '\n' ':')
 
 # Nombre completo de la clase principal (con paquete)
+MAIN_FILE = com/vroute/Main.java
 MAIN_CLASS = com.vroute.Main
-SIMULATION_CLASS = com.vroute.SimulationLauncher
-ROUTING_CLASS = com.vroute.RoutingApplication
-API_SERVICE_CLASS = com.vroute.api.ApiServiceLauncher
+BLOQUEO_DEMO_FILE = com/vroute/ui/BloqueoDemo.java
 BLOQUEO_DEMO_CLASS = com.vroute.ui.BloqueoDemo
 
 # Regla por defecto
@@ -29,7 +28,7 @@ compile:
 	@echo "Creando directorio de salida: $(BIN_DIR)..."
 	@mkdir -p $(BIN_DIR)
 	@echo "Compilando con JavaFX..."
-	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/Main.java
+	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/$(MAIN_FILE)
 	@echo "Compilación finalizada."
 
 # Regla para ejecutar la aplicación principal
@@ -42,7 +41,7 @@ run-bloqueos:
 	@echo "Creando directorio de salida: $(BIN_DIR)..."
 	@mkdir -p $(BIN_DIR)
 	@echo "Compilando la demo de bloqueos y el módulo de pathfinding..."
-	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/ui/BloqueoDemo.java
+	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/$(BLOQUEO_DEMO_FILE)
 	@echo "Ejecutando $(BLOQUEO_DEMO_CLASS)..."
 	java -cp $(BIN_DIR) $(BLOQUEO_DEMO_CLASS)
 

@@ -4,13 +4,13 @@ import com.vroute.utils.Constants;
 
 public class Deposito {
     private String id;
-    private Posicion ubicacion;
+    private Posicion posicion;
     private int capacidadGLP;
     private boolean esPlantaPrincipal;
 
     public Deposito(String id, Posicion ubicacion, boolean esPlantaPrincipal) {
         this.id = id;
-        this.ubicacion = ubicacion;
+        this.posicion = ubicacion;
         this.esPlantaPrincipal = esPlantaPrincipal;
         if (!esPlantaPrincipal) {
             this.capacidadGLP = Constants.INTERMEDIATE_TANK_CAPACITY_M3;
@@ -23,8 +23,8 @@ public class Deposito {
         return id;
     }
 
-    public Posicion getUbicacion() {
-        return ubicacion;
+    public Posicion getPosicion() {
+        return posicion;
     }
 
     public int getCapacidadGLP() {

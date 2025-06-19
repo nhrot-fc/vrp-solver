@@ -11,7 +11,8 @@ public class Entorno {
     private final List<Bloqueo> bloqueos;
     private final List<Mantenimiento> mantenimientos;
 
-    public Entorno(LocalDateTime horaActual, List<Vehiculo> vehiculos, List<Pedido> pedidos, List<Deposito> depositos, List<Bloqueo> bloqueos, List<Mantenimiento> mantenimientos) {
+    public Entorno(LocalDateTime horaActual, List<Vehiculo> vehiculos, List<Pedido> pedidos, List<Deposito> depositos,
+            List<Bloqueo> bloqueos, List<Mantenimiento> mantenimientos) {
         this.horaActual = horaActual;
         this.vehiculos = vehiculos;
         this.pedidos = pedidos;
@@ -44,20 +45,14 @@ public class Entorno {
         return mantenimientos;
     }
 
-    /**
-     * Devuelve solo los bloqueos que están activos en la hora actual de simulación.
-     * Un bloqueo está activo si la hora actual está entre su hora de inicio y su hora de fin.
-     * 
-     * @return Lista de bloqueos activos
-     */
     public List<Bloqueo> getBloqueosActivos() {
         if (bloqueos == null) {
             return java.util.Collections.emptyList();
         }
-        
+
         return bloqueos.stream()
-            .filter(bloqueo -> bloqueo.estaActivo(horaActual))
-            .collect(java.util.stream.Collectors.toList());
+                .filter(bloqueo -> bloqueo.estaActivo(horaActual))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     public List<Bloqueo> getBloqueosActivosEnMomento(LocalDateTime momento) {
@@ -67,9 +62,9 @@ public class Entorno {
         if (bloqueos == null) {
             return java.util.Collections.emptyList();
         }
-        
+
         return bloqueos.stream()
-            .filter(bloqueo -> bloqueo.estaActivo(momento))
-            .collect(java.util.stream.Collectors.toList());
+                .filter(bloqueo -> bloqueo.estaActivo(momento))
+                .collect(java.util.stream.Collectors.toList());
     }
 }

@@ -25,12 +25,12 @@ public class VehiculoRenderer implements Renderer<Vehiculo> {
     }
     
     // Colores por estado operativo
-    private static final Map<Vehiculo.EstadoOperativo, Color> COLOR_POR_ESTADO = new HashMap<>();
+    private static final Map<Vehiculo.Estado, Color> COLOR_POR_ESTADO = new HashMap<>();
     static {
-        COLOR_POR_ESTADO.put(Vehiculo.EstadoOperativo.DISPONIBLE, new Color(0, 150, 0)); // Verde
-        COLOR_POR_ESTADO.put(Vehiculo.EstadoOperativo.EN_RUTA, new Color(50, 100, 200)); // Azul
-        COLOR_POR_ESTADO.put(Vehiculo.EstadoOperativo.EN_MANTENIMIENTO, new Color(200, 150, 0)); // Naranja
-        COLOR_POR_ESTADO.put(Vehiculo.EstadoOperativo.AVERIADO, new Color(200, 0, 0)); // Rojo
+        COLOR_POR_ESTADO.put(Vehiculo.Estado.DISPONIBLE, new Color(0, 150, 0)); // Verde
+        COLOR_POR_ESTADO.put(Vehiculo.Estado.EN_RUTA, new Color(50, 100, 200)); // Azul
+        COLOR_POR_ESTADO.put(Vehiculo.Estado.EN_MANTENIMIENTO, new Color(200, 150, 0)); // Naranja
+        COLOR_POR_ESTADO.put(Vehiculo.Estado.AVERIADO, new Color(200, 0, 0)); // Rojo
     }
     
     // Tamaño base para dibujar el vehículo (se ajusta según zoom)
@@ -75,7 +75,7 @@ public class VehiculoRenderer implements Renderer<Vehiculo> {
         
         // Dibujar indicador de estado
         Color colorEstado = COLOR_POR_ESTADO.getOrDefault(
-            vehiculo.getEstadoOperativo(), new Color(100, 100, 100));
+            vehiculo.getEstado(), new Color(100, 100, 100));
         g2d.setColor(colorEstado);
         g2d.fillOval(punto.x - tamanoVehiculo/4, punto.y - tamanoVehiculo/4, 
                      tamanoVehiculo/2, tamanoVehiculo/2);

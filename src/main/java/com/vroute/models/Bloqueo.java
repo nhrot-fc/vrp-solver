@@ -60,24 +60,10 @@ public class Bloqueo {
         return puntosBloqueados;
     }
 
-    /**
-     * Determina si un bloqueo está activo en un momento dado.
-     * Un bloqueo está activo si el momento especificado está entre horaInicio (inclusive) y horaFin (exclusive).
-     * 
-     * @param momento El momento para verificar
-     * @return true si el bloqueo está activo en ese momento, false en caso contrario
-     */
     public boolean estaActivo(LocalDateTime momento) {
         return !momento.isBefore(horaInicio) && momento.isBefore(horaFin);
     }
 
-    /**
-     * Verifica si una posición específica está bloqueada en un momento dado.
-     * 
-     * @param posicion Posición a verificar
-     * @param momento Momento a verificar
-     * @return true si la posición está bloqueada en ese momento, false en caso contrario
-     */
     public boolean posicionEstaBloqueada(Posicion posicion, LocalDateTime momento) {
         return estaActivo(momento) && puntosBloqueados.contains(posicion);
     }
