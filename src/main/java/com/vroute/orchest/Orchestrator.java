@@ -56,15 +56,6 @@ public class Orchestrator {
         }
         simulationRunning = true;
         logger.info("Starting simulation at " + simulationTime);
-        environment.setCurrentTime(simulationTime);
-
-        while (simulationRunning
-                && simulationTime.isBefore(environment.getCurrentTime().plusDays(config.getSimulationMaxDays()))) {
-            boolean continueSimulation = runSimulationStep();
-            if (!continueSimulation) {
-                break;
-            }
-        }
     }
 
     public void stopSimulation() {
@@ -75,43 +66,51 @@ public class Orchestrator {
         simulationRunning = false;
         logger.info("Stopping simulation at " + simulationTime);
     }
-
-    public boolean runSimulationStep() {
+    
+    /**
+     * Main method that advances the simulation by one tick
+     */
+    public boolean advanceTick() {
+        // Update environment state and process events
         updateEnvironment();
-        processEvents();
+        
+        // Execute current vehicle plans
         executeVehiclePlans();
-
+        
         // Increment tick counter
         tickCounter++;
-
+        
         // Log environment state periodically
         if (tickCounter % ticksPerReplan == 0) {
             logger.info(environment.toString());
         }
-
+        
+        // Check if replanning is needed
         boolean tickBasedReplanning = tickCounter >= ticksPerReplan;
-
-        // Only replan if we have both orders and vehicles
+        
+        // Perform replanning if needed and there are vehicles available
         if ((needsReplanning || tickBasedReplanning) && !environment.getAvailableVehicles().isEmpty()) {
             replanVehicles();
             needsReplanning = false;
             tickCounter = 0; // Reset tick counter after replanning
             stats.incrementTotalReplans(); // Update stats
         }
-
+        
         // Advance simulation time
         advanceSimulation();
 
-        // Return whether the simulation should continue
-        return simulationTime.isBefore(environment.getCurrentTime().plusDays(config.getSimulationMaxDays()));
+        return simulationRunning && simulationTime.isBefore(environment.getCurrentTime().plusDays(config.getSimulationMaxDays()));
     }
 
+    /**
+     * Updates the environment state and processes pending events
+     */
     private void updateEnvironment() {
+        // Update environment time
         environment.setCurrentTime(simulationTime);
-        // No longer adding orders directly here - they are handled by ORDER_ARRIVAL
-        // events
-        // We only update the environment's time and other periodic updates that
-        // aren't tied to specific events
+        
+        // Process all events that have occurred up to the current time
+        processEvents();
     }
 
     private void processEvents() {
@@ -121,6 +120,175 @@ public class Orchestrator {
         }
     }
 
+    private void processEvent(Event event) {
+        logger.info("Processing event: " + event);
+
+        switch (event.getType()) {
+            case ORDER_ARRIVAL:
+                if (event.getEntityId() != null && event.getData() != null) {
+                    Order order = event.getData();
+                    environment.addOrder(order);
+                    logger.info("Added new order to environment: " + order.getId());
+                    stats.recordNewOrder();
+                    needsReplanning = false;
+                }
+                break;
+
+            case BLOCKAGE_START:
+                if (event.getData() != null) {
+                    Blockage blockage = event.getData();
+                    environment.addBlockage(blockage);
+                    logger.info("Blockage started: " + blockage);
+                    stats.recordBlockage(java.time.Duration.between(blockage.getStartTime(), blockage.getEndTime()));
+                    needsReplanning = false;
+                }
+                break;
+
+            case BLOCKAGE_END:
+                // The environment should handle removing expired blockages
+                logger.info("Blockage ended with ID: " + event.getEntityId());
+                needsReplanning = true;
+                break;
+
+            case VEHICLE_BREAKDOWN:
+                if (event.getEntityId() != null) {
+                    String vehicleId = event.getEntityId();
+                    // Find the vehicle and update its status
+                    for (Vehicle vehicle : environment.getVehicles()) {
+                        if (vehicle.getId().equals(vehicleId)) {
+                            vehicle.setStatus(VehicleStatus.UNAVAILABLE);
+                            logger.info("Vehicle breakdown: " + vehicleId);
+                            
+                            // Remove any plans for this vehicle
+                            vehiclePlans.remove(vehicle);
+                            
+                            needsReplanning = true;
+                            stats.recordVehicleBreakdown(vehicleId);
+                            break;
+                        }
+                    }
+                }
+                break;
+
+            case MAINTENANCE_START:
+                if (event.getEntityId() != null && event.getData() != null) {
+                    MaintenanceTask task = event.getData();
+                    environment.addMaintenanceTask(task);
+                    
+                    // Update vehicle status to MAINTENANCE
+                    for (Vehicle vehicle : environment.getVehicles()) {
+                        if (vehicle.getId().equals(event.getEntityId())) {
+                            vehicle.setStatus(VehicleStatus.MAINTENANCE);
+                            
+                            // Remove any plans for this vehicle
+                            vehiclePlans.remove(vehicle);
+                            break;
+                        }
+                    }
+                    
+                    logger.info("Maintenance started for vehicle: " + event.getEntityId());
+                    stats.recordMaintenanceEvent();
+                    needsReplanning = true;
+                }
+                break;
+
+            case MAINTENANCE_END:
+                // Find the maintenance task and mark it as completed
+                String vehicleId = event.getEntityId();
+                if (vehicleId != null) {
+                    for (Vehicle vehicle : environment.getVehicles()) {
+                        if (vehicle.getId().equals(vehicleId)) {
+                            vehicle.setStatus(VehicleStatus.AVAILABLE);
+                            logger.info("Maintenance ended for vehicle: " + vehicleId);
+                            needsReplanning = true;
+                            break;
+                        }
+                    }
+                }
+                break;
+                
+            case GLP_DEPOT_REFILL:
+                if (event.getEntityId() != null) {
+                    String depotId = event.getEntityId();
+                    for (Depot depot : environment.getAuxDepots()) {
+                        if (depot.getId().equals(depotId)) {
+                            depot.refillGLP();
+                            logger.info("GLP depot refilled: " + depotId);
+                            break;
+                        }
+                    }
+                }
+                break;
+
+            case SIMULATION_END:
+                logger.info("Simulation end event received");
+                simulationRunning = false;
+                break;
+
+            default:
+                logger.warning("Unknown event type: " + event.getType());
+                break;
+        }
+    }
+
+    private void executeVehiclePlans() {
+        for (Map.Entry<Vehicle, VehiclePlan> entry : vehiclePlans.entrySet()) {
+            Vehicle vehicle = entry.getKey();
+            VehiclePlan plan = entry.getValue();
+
+            if (vehicle.getStatus() == VehicleStatus.UNAVAILABLE || plan == null) {
+                logger.fine("Skipping vehicle " + vehicle.getId() + " (unavailable or no plan)");
+                continue;
+            }
+
+            for (Action action : plan.getActions()) {
+                if (action.getExpectedStartTime().isBefore(simulationTime)) {
+                    action.execute(vehicle, environment, simulationTime);
+                    logger.fine("Executed action: " + action + " for vehicle: " + vehicle.getId());
+                } else {
+                    logger.fine("Skipping action: " + action + " for vehicle: " + vehicle.getId()
+                            + " as it is scheduled for future time.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Replans vehicle assignments based on current environment state
+     */
+    private void replanVehicles() {
+        logger.info(String.format("Replanning vehicles at [%s] | with %d/%d ticks per replan | needsReplanning: %b",
+                simulationTime, tickCounter, ticksPerReplan, needsReplanning));
+        
+        // Check if there are any pending orders and available vehicles
+        List<Order> pendingOrders = environment.getPendingOrders();
+        List<Vehicle> availableVehicles = environment.getAvailableVehicles();
+        
+        if (pendingOrders.isEmpty()) {
+            logger.info("No pending orders to deliver. Skipping replanning.");
+            return;
+        }
+
+        if (availableVehicles.isEmpty()) {
+            logger.info("No available vehicles for delivery. Skipping replanning.");
+            return;
+        }
+
+        // Log statistics before replanning for comparison
+        int previousPlanCount = vehiclePlans.size();
+        int pendingOrdersCount = pendingOrders.size();
+
+        // Run the assignation algorithm
+        runAssignation();
+
+        // Log the results
+        logger.info(String.format("Replanning completed: %d plans (previously %d) for %d pending orders",
+                vehiclePlans.size(), previousPlanCount, pendingOrdersCount));
+    }
+
+    /**
+     * Runs the metaheuristic assignation algorithm and creates vehicle plans
+     */
     private void runAssignation() {
         // Check if there are any available vehicles
         List<Vehicle> availableVehicles = environment.getAvailableVehicles();
@@ -176,8 +344,8 @@ public class Orchestrator {
 
         // Create default plans for vehicles without assignments
         for (Vehicle vehicle : availableVehicles) {
-            // Skip unavailable vehicles and vehicles that already have plans
-            if (vehicle.getStatus() == VehicleStatus.UNAVAILABLE || assignedVehicles.contains(vehicle)) {
+            // Skip unavailable vehicles
+            if (vehicle.getStatus() == VehicleStatus.UNAVAILABLE) {
                 continue;
             }
 
@@ -197,126 +365,9 @@ public class Orchestrator {
         logger.info("Assignation completed with " + vehiclePlans.size() + " vehicle plans created.");
     }
 
-    private void processEvent(Event event) {
-        logger.info("Processing event: " + event);
-
-        switch (event.getType()) {
-            case ORDER_ARRIVAL:
-                if (event.getEntityId() != null && event.getData() != null) {
-                    Order order = event.getData();
-                    environment.addOrder(order);
-                    logger.info("Added new order to environment: " + order.getId());
-                }
-                needsReplanning = false;
-                break;
-
-            case BLOCKAGE_START:
-                if (event.getData() != null) {
-                    Blockage blockage = event.getData();
-                    logger.info("Blockage started: " + blockage);
-                    needsReplanning = false;
-                }
-                break;
-
-            case BLOCKAGE_END:
-                // The environment should handle removing expired blockages
-                logger.info("Blockage ended with ID: " + event.getEntityId());
-                needsReplanning = false;
-                break;
-
-            case VEHICLE_BREAKDOWN:
-                if (event.getEntityId() != null) {
-                    String vehicleId = event.getEntityId();
-                    // Find the vehicle and update its status
-                    for (Vehicle vehicle : environment.getVehicles()) {
-                        if (vehicle.getId().equals(vehicleId)) {
-                            vehicle.setStatus(VehicleStatus.UNAVAILABLE);
-                            logger.info("Vehicle breakdown: " + vehicleId);
-                            needsReplanning = true;
-                            stats.recordVehicleBreakdown(vehicleId);
-                            break;
-                        }
-                    }
-                }
-                break;
-
-            case MAINTENANCE_START:
-                if (event.getEntityId() != null && event.getData() != null) {
-                    MaintenanceTask task = event.getData();
-                    environment.addMaintenanceTask(task);
-                    logger.info("Maintenance started for vehicle: " + event.getEntityId());
-                    stats.recordMaintenanceEvent();
-                    needsReplanning = true;
-                }
-                break;
-
-            case MAINTENANCE_END:
-                logger.info("Maintenance ended for vehicle: " + event.getEntityId());
-                needsReplanning = true;
-                break;
-
-            case SIMULATION_END:
-                logger.info("Simulation end event received");
-                simulationRunning = false;
-                break;
-
-            default:
-                logger.warning("Unknown event type: " + event.getType());
-                break;
-        }
-    }
-
-    private void executeVehiclePlans() {
-        for (Map.Entry<Vehicle, VehiclePlan> entry : vehiclePlans.entrySet()) {
-            Vehicle vehicle = entry.getKey();
-            VehiclePlan plan = entry.getValue();
-
-            if (vehicle.getStatus() == VehicleStatus.UNAVAILABLE || plan == null) {
-                logger.fine("Skipping vehicle " + vehicle.getId() + " (unavailable or no plan)");
-                continue;
-            }
-
-            for (Action action : plan.getActions()) {
-                if (action.getExpectedStartTime().isBefore(simulationTime)) {
-                    action.execute(vehicle, environment, simulationTime);
-                    logger.fine("Executed action: " + action + " for vehicle: " + vehicle.getId());
-                } else {
-                    logger.fine("Skipping action: " + action + " for vehicle: " + vehicle.getId()
-                            + " as it is scheduled for future time.");
-                }
-            }
-        }
-    }
-
-    private void replanVehicles() {
-        logger.info(String.format("Replanning vehicles at [%s] | with %d/%d ticks per replan | needsReplanning: %b",
-                simulationTime, tickCounter, ticksPerReplan, needsReplanning));
-        // Check if there are any pending orders
-        List<Order> pendingOrders = environment.getPendingOrders();
-        if (pendingOrders.isEmpty()) {
-            logger.info("No pending orders to deliver. Skipping replanning.");
-            return;
-        }
-
-        // Check if there are any available vehicles
-        List<Vehicle> availableVehicles = environment.getAvailableVehicles();
-        if (availableVehicles.isEmpty()) {
-            logger.info("No available vehicles for delivery. Skipping replanning.");
-            return;
-        }
-
-        // Log statistics before replanning for comparison
-        int previousPlanCount = vehiclePlans.size();
-        int pendingOrdersCount = pendingOrders.size();
-
-        // Run the assignation algorithm
-        runAssignation();
-
-        // Log the results
-        logger.info(String.format("Replanning completed: %d plans (previously %d) for %d pending orders",
-                vehiclePlans.size(), previousPlanCount, pendingOrdersCount));
-    }
-
+    /**
+     * Advances the simulation time by the configured step amount
+     */
     private void advanceSimulation() {
         int simulationStep = config.getSimulationStepMinutes();
         simulationTime = simulationTime.plusMinutes(simulationStep);
@@ -334,8 +385,46 @@ public class Orchestrator {
         Event endEvent = new Event(EventType.SIMULATION_END, endTime);
         this.eventQueue.add(endEvent);
         this.eventQueue.sort(Comparator.comparing(Event::getTime));
+        
+        // Make sure environment time is synced with simulation time
+        environment.setCurrentTime(this.simulationTime);
 
         logger.info("Orchestrator initialized with time: " + this.simulationTime);
         logger.info("Simulation end scheduled for: " + endTime);
+    }
+    
+    /**
+     * Replaces the startSimulation method since we're advancing ticks from the UI now.
+     * Just makes sure the simulation is ready to run.
+     */
+    public void prepareSimulation() {
+        if (simulationRunning) {
+            logger.warning("Simulation is already running.");
+            return;
+        }
+        simulationRunning = true;
+        logger.info("Simulation prepared to start at " + simulationTime);
+        environment.setCurrentTime(simulationTime);
+    }
+    
+    /**
+     * Sets the number of ticks between replanning operations
+     * @param ticks Number of ticks between replans
+     */
+    public void setTicksPerReplan(int ticks) {
+        if (ticks <= 0) {
+            logger.warning("Invalid ticks per replan: " + ticks + ". Using default value.");
+            return;
+        }
+        this.ticksPerReplan = ticks;
+        logger.info("Replanning frequency set to: " + ticks + " ticks");
+    }
+    
+    /**
+     * Gets the current number of ticks between replanning operations
+     * @return Number of ticks between replans
+     */
+    public int getTicksPerReplan() {
+        return this.ticksPerReplan;
     }
 }

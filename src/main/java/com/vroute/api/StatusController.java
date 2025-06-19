@@ -9,10 +9,13 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * REST controller for providing system status information via HTTP endpoints.
@@ -22,11 +25,13 @@ public class StatusController implements HttpHandler {
     
     private final Environment environment;
     private final Orchestrator orchestrator;
+    private final ApiServiceLauncher serviceLauncher;
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     
-    public StatusController(Environment environment, Orchestrator orchestrator) {
+    public StatusController(Environment environment, Orchestrator orchestrator, ApiServiceLauncher serviceLauncher) {
         this.environment = environment;
         this.orchestrator = orchestrator;
+        this.serviceLauncher = serviceLauncher;
     }
     
     @Override
@@ -44,6 +49,52 @@ public class StatusController implements HttpHandler {
             exchange.sendResponseHeaders(200, 0);
             exchange.getResponseBody().close();
             return;
+        }
+        
+        // Special case for the config endpoint which supports both GET and POST
+        if (path.equals("/api/config")) {
+            if ("GET".equals(method)) {
+                String response = getSimulationConfig();
+                sendResponse(exchange, 200, response);
+                return;
+            } else if ("POST".equals(method)) {
+                String requestBody = readRequestBody(exchange);
+                try {
+                    handleConfigUpdate(requestBody);
+                    String response = "{\"status\":\"success\",\"message\":\"Configuration updated\"}";
+                    sendResponse(exchange, 200, response);
+                    return;
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, 400, "Invalid configuration: " + e.getMessage());
+                    return;
+                }
+            } else {
+                sendErrorResponse(exchange, 405, "Method not allowed");
+                return;
+            }
+        }
+        
+        // Special case for simulation control endpoint
+        if (path.equals("/api/simulation")) {
+            if ("GET".equals(method)) {
+                String response = getSimulationStatus();
+                sendResponse(exchange, 200, response);
+                return;
+            } else if ("POST".equals(method)) {
+                String requestBody = readRequestBody(exchange);
+                try {
+                    handleSimulationControl(requestBody);
+                    String response = "{\"status\":\"success\",\"message\":\"Simulation control applied\"}";
+                    sendResponse(exchange, 200, response);
+                    return;
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, 400, "Invalid simulation control: " + e.getMessage());
+                    return;
+                }
+            } else {
+                sendErrorResponse(exchange, 405, "Method not allowed");
+                return;
+            }
         }
         
         if (!"GET".equals(method)) {
@@ -68,6 +119,9 @@ public class StatusController implements HttpHandler {
                     break;
                 case "/api/stats":
                     response = getSimulationStats();
+                    break;
+                case "/api/environment":
+                    response = getEnvironmentSnapshot();
                     break;
                 default:
                     sendErrorResponse(exchange, 404, "Endpoint not found");
@@ -337,6 +391,145 @@ public class StatusController implements HttpHandler {
         );
     }
     
+    /**
+     * Returns a complete snapshot of the environment state in JSON format
+     */
+    private String getEnvironmentSnapshot() {
+        LocalDateTime currentTime = environment.getCurrentTime();
+        List<Vehicle> vehicles = environment.getVehicles();
+        List<Order> orders = environment.getOrderQueue();
+        List<Blockage> blockages = environment.getActiveBlockages();
+        Depot mainDepot = environment.getMainDepot();
+        List<Depot> auxDepots = environment.getAuxDepots();
+        
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("  \"timestamp\": \"").append(LocalDateTime.now().format(formatter)).append("\",\n");
+        json.append("  \"simulationTime\": \"").append(currentTime.format(formatter)).append("\",\n");
+        
+        // Add vehicles
+        json.append("  \"vehicles\": [\n");
+        for (int i = 0; i < vehicles.size(); i++) {
+            Vehicle vehicle = vehicles.get(i);
+            json.append("    {\n");
+            json.append("      \"id\": \"").append(vehicle.getId()).append("\",\n");
+            json.append("      \"type\": \"").append(vehicle.getType().name()).append("\",\n");
+            json.append("      \"status\": \"").append(vehicle.getStatus().name()).append("\",\n");
+            json.append("      \"position\": {\n");
+            json.append("        \"x\": ").append(vehicle.getCurrentPosition().getX()).append(",\n");
+            json.append("        \"y\": ").append(vehicle.getCurrentPosition().getY()).append("\n");
+            json.append("      },\n");
+            json.append("      \"fuel\": {\n");
+            json.append("        \"current\": ").append(String.format("%.2f", vehicle.getCurrentFuelGal())).append(",\n");
+            json.append("        \"capacity\": ").append(String.format("%.2f", vehicle.getFuelCapacityGal())).append("\n");
+            json.append("      },\n");
+            json.append("      \"glp\": {\n");
+            json.append("        \"current\": ").append(vehicle.getCurrentGlpM3()).append(",\n");
+            json.append("        \"capacity\": ").append(vehicle.getGlpCapacityM3()).append("\n");
+            json.append("      }\n");
+            json.append("    }");
+            if (i < vehicles.size() - 1) {
+                json.append(",");
+            }
+            json.append("\n");
+        }
+        json.append("  ],\n");
+        
+        // Add orders
+        json.append("  \"orders\": [\n");
+        for (int i = 0; i < orders.size(); i++) {
+            Order order = orders.get(i);
+            json.append("    {\n");
+            json.append("      \"id\": \"").append(order.getId()).append("\",\n");
+            json.append("      \"arriveTime\": \"").append(order.getArriveTime().format(formatter)).append("\",\n");
+            json.append("      \"dueTime\": \"").append(order.getDueTime().format(formatter)).append("\",\n");
+            json.append("      \"position\": {\n");
+            json.append("        \"x\": ").append(order.getPosition().getX()).append(",\n");
+            json.append("        \"y\": ").append(order.getPosition().getY()).append("\n");
+            json.append("      },\n");
+            json.append("      \"glpRequest\": ").append(order.getGlpRequestM3()).append(",\n");
+            json.append("      \"delivered\": ").append(order.isDelivered()).append(",\n");
+            json.append("      \"overdue\": ").append(order.isOverdue(currentTime)).append(",\n");
+            json.append("      \"priority\": ").append(String.format("%.2f", order.calculatePriority(currentTime))).append("\n");
+            json.append("    }");
+            if (i < orders.size() - 1) {
+                json.append(",");
+            }
+            json.append("\n");
+        }
+        json.append("  ],\n");
+        
+        // Add blockages
+        json.append("  \"blockages\": [\n");
+        for (int i = 0; i < blockages.size(); i++) {
+            Blockage blockage = blockages.get(i);
+            json.append("    {\n");
+            json.append("      \"startTime\": \"").append(blockage.getStartTime().format(formatter)).append("\",\n");
+            json.append("      \"endTime\": \"").append(blockage.getEndTime().format(formatter)).append("\",\n");
+            json.append("      \"isActive\": ").append(blockage.isActiveAt(currentTime)).append(",\n");
+            json.append("      \"points\": [\n");
+            
+            List<Position> points = blockage.getLines();
+            for (int j = 0; j < points.size(); j++) {
+                Position point = points.get(j);
+                json.append("        {\n");
+                json.append("          \"x\": ").append(point.getX()).append(",\n");
+                json.append("          \"y\": ").append(point.getY()).append("\n");
+                json.append("        }");
+                if (j < points.size() - 1) {
+                    json.append(",");
+                }
+                json.append("\n");
+            }
+            
+            json.append("      ]\n");
+            json.append("    }");
+            if (i < blockages.size() - 1) {
+                json.append(",");
+            }
+            json.append("\n");
+        }
+        json.append("  ],\n");
+        
+        // Add depots
+        json.append("  \"depots\": {\n");
+        
+        // Main depot
+        json.append("    \"main\": {\n");
+        json.append("      \"id\": \"").append(mainDepot.getId()).append("\",\n");
+        json.append("      \"position\": {\n");
+        json.append("        \"x\": ").append(mainDepot.getPosition().getX()).append(",\n");
+        json.append("        \"y\": ").append(mainDepot.getPosition().getY()).append("\n");
+        json.append("      },\n");
+        json.append("      \"glpCapacity\": ").append(mainDepot.getGlpCapacityM3()).append(",\n");
+        json.append("      \"isMainPlant\": true\n");
+        json.append("    },\n");
+        
+        // Auxiliary depots
+        json.append("    \"auxiliary\": [\n");
+        for (int i = 0; i < auxDepots.size(); i++) {
+            Depot depot = auxDepots.get(i);
+            json.append("      {\n");
+            json.append("        \"id\": \"").append(depot.getId()).append("\",\n");
+            json.append("        \"position\": {\n");
+            json.append("          \"x\": ").append(depot.getPosition().getX()).append(",\n");
+            json.append("          \"y\": ").append(depot.getPosition().getY()).append("\n");
+            json.append("        },\n");
+            json.append("        \"glpCapacity\": ").append(depot.getGlpCapacityM3()).append(",\n");
+            json.append("        \"isMainPlant\": false\n");
+            json.append("      }");
+            if (i < auxDepots.size() - 1) {
+                json.append(",");
+            }
+            json.append("\n");
+        }
+        json.append("    ]\n");
+        json.append("  }\n");
+        
+        json.append("}");
+        return json.toString();
+    }
+    
     private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         byte[] responseBytes = response.getBytes("UTF-8");
         exchange.sendResponseHeaders(statusCode, responseBytes.length);
@@ -354,5 +547,164 @@ public class StatusController implements HttpHandler {
             }
             """, message, statusCode, LocalDateTime.now().format(formatter));
         sendResponse(exchange, statusCode, errorResponse);
+    }
+    
+    /**
+     * Reads the request body from an HTTP exchange
+     */
+    private String readRequestBody(HttpExchange exchange) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()))) {
+            return reader.lines().collect(Collectors.joining());
+        }
+    }
+    
+    /**
+     * Handles updates to the simulation configuration
+     */
+    private void handleConfigUpdate(String requestBody) throws Exception {
+        // Parse the JSON configuration
+        if (requestBody == null || requestBody.isEmpty()) {
+            throw new IllegalArgumentException("Empty request body");
+        }
+        
+        // Very basic parsing to extract ticksPerReplan
+        // In a real implementation, you would use a proper JSON parser
+        if (requestBody.contains("\"ticksPerReplan\"")) {
+            int startIndex = requestBody.indexOf("\"ticksPerReplan\"");
+            int colonIndex = requestBody.indexOf(":", startIndex);
+            int commaIndex = requestBody.indexOf(",", colonIndex);
+            if (commaIndex == -1) {
+                commaIndex = requestBody.indexOf("}", colonIndex);
+            }
+            
+            if (startIndex > 0 && colonIndex > 0 && commaIndex > 0) {
+                String valueStr = requestBody.substring(colonIndex + 1, commaIndex).trim();
+                try {
+                    int ticksPerReplan = Integer.parseInt(valueStr);
+                    orchestrator.setTicksPerReplan(ticksPerReplan);
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("Invalid ticksPerReplan value: " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+    /**
+     * Returns the current simulation configuration
+     */
+    private String getSimulationConfig() {
+        return String.format("""
+            {
+                "timestamp": "%s",
+                "config": {
+                    "ticksPerReplan": %d
+                }
+            }
+            """,
+            LocalDateTime.now().format(formatter),
+            orchestrator.getTicksPerReplan()
+        );
+    }
+    
+    /**
+     * Handles simulation control requests (start, pause, speed)
+     */
+    private void handleSimulationControl(String requestBody) throws Exception {
+        // Parse the JSON request body for simulation control commands
+        if (requestBody == null || requestBody.isEmpty()) {
+            throw new IllegalArgumentException("Empty request body");
+        }
+        
+        // Check for command
+        if (requestBody.contains("\"command\"")) {
+            String command = extractStringValue(requestBody, "command");
+            
+            if (command != null) {
+                switch (command.toLowerCase()) {
+                    case "start":
+                    case "resume":
+                        serviceLauncher.resumeSimulation();
+                        break;
+                    case "pause":
+                    case "stop":
+                        serviceLauncher.pauseSimulation();
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown command: " + command);
+                }
+            }
+        }
+        
+        // Check for speed adjustment
+        if (requestBody.contains("\"speed\"")) {
+            Integer speed = extractIntValue(requestBody, "speed");
+            if (speed != null) {
+                serviceLauncher.setSimulationSpeed(speed);
+            }
+        }
+    }
+    
+    /**
+     * Returns the current simulation status
+     */
+    private String getSimulationStatus() {
+        return String.format("""
+            {
+                "timestamp": "%s",
+                "simulationTime": "%s",
+                "status": {
+                    "running": %b,
+                    "speed": %d
+                }
+            }
+            """,
+            LocalDateTime.now().format(formatter),
+            environment.getCurrentTime().format(formatter),
+            serviceLauncher.isSimulationRunning(),
+            serviceLauncher.getSimulationSpeed()
+        );
+    }
+    
+    /**
+     * Extracts a string value from a simple JSON string
+     */
+    private String extractStringValue(String json, String key) {
+        String keyQuoted = "\"" + key + "\"";
+        if (json.contains(keyQuoted)) {
+            int startIndex = json.indexOf(keyQuoted);
+            int colonIndex = json.indexOf(":", startIndex);
+            int valueStartIndex = json.indexOf("\"", colonIndex) + 1;
+            int valueEndIndex = json.indexOf("\"", valueStartIndex);
+            
+            if (valueStartIndex > 0 && valueEndIndex > 0) {
+                return json.substring(valueStartIndex, valueEndIndex);
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Extracts an integer value from a simple JSON string
+     */
+    private Integer extractIntValue(String json, String key) {
+        String keyQuoted = "\"" + key + "\"";
+        if (json.contains(keyQuoted)) {
+            int startIndex = json.indexOf(keyQuoted);
+            int colonIndex = json.indexOf(":", startIndex);
+            int commaIndex = json.indexOf(",", colonIndex);
+            if (commaIndex == -1) {
+                commaIndex = json.indexOf("}", colonIndex);
+            }
+            
+            if (startIndex > 0 && colonIndex > 0 && commaIndex > 0) {
+                String valueStr = json.substring(colonIndex + 1, commaIndex).trim();
+                try {
+                    return Integer.parseInt(valueStr);
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 }

@@ -186,43 +186,17 @@ public class VehiclePlan {
      * @return The next action to execute, or null if no action is scheduled
      */
     public Action getNextAction(LocalDateTime currentTime) {
-        if (isCompleted()) {
-            return null;
-        }
-        
         LocalDateTime actionStartTime = this.startTime;
         for (Action action : this.actions) {
             LocalDateTime actionEndTime = actionStartTime.plus(action.getDuration());
-            
             if (currentTime.isBefore(actionEndTime)) {
-                // This action extends or starts after the current time
                 return action;
             }
             
             actionStartTime = actionEndTime;
         }
-        
+
         return null;
-    }
-    
-    /**
-     * Checks if the plan is completed.
-     * 
-     * @return true if all actions have been executed, false otherwise
-     */
-    public boolean isCompleted() {
-        if (this.actions.isEmpty()) {
-            return true;
-        }
-        
-        // Calculate the end time of the last action
-        LocalDateTime endTime = this.startTime;
-        for (Action action : this.actions) {
-            endTime = endTime.plus(action.getDuration());
-        }
-        
-        // If the current time is after the end time, the plan is completed
-        return LocalDateTime.now().isAfter(endTime);
     }
 
     public int getOrderCount() {

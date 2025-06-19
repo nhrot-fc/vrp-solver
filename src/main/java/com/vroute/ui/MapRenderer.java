@@ -116,9 +116,31 @@ public class MapRenderer {
         idText.setFont(Font.font("Arial", FontWeight.NORMAL, cellSize * 0.3));
         idText.setTranslateX(-idText.getLayoutBounds().getWidth() / 2);
         pane.getChildren().add(idText);
+        
+        // Add GLP level label
+        Text glpText = new Text(pos.getX() * cellSize + cellSize / 2,
+                (pos.getY() + 1) * cellSize + cellSize * 0.5,
+                String.format("GLP: %d/%d", depot.getCurrentGlpM3(), depot.getGlpCapacityM3()));
+        glpText.setFill(Color.BLACK);
+        glpText.setFont(Font.font("Arial", FontWeight.NORMAL, cellSize * 0.25));
+        glpText.setTranslateX(-glpText.getLayoutBounds().getWidth() / 2);
+        pane.getChildren().add(glpText);
+        
+        // Add refuel capability indicator if applicable
+        if (depot.canRefuel()) {
+            Text fuelText = new Text(pos.getX() * cellSize + cellSize / 2,
+                    (pos.getY() + 1) * cellSize + cellSize * 0.8,
+                    "⛽ Fuel");
+            fuelText.setFill(Color.DARKGREEN);
+            fuelText.setFont(Font.font("Arial", FontWeight.NORMAL, cellSize * 0.25));
+            fuelText.setTranslateX(-fuelText.getLayoutBounds().getWidth() / 2);
+            pane.getChildren().add(fuelText);
+        }
     }
 
-    public static void drawOrders(Pane pane, List<Order> orders, int cellSize) {
+    public static void drawOrders(Pane pane, List<Order> orders, Environment environment, int cellSize) {
+        LocalDateTime currentTime = environment.getCurrentTime();
+        
         for (Order order : orders) {
             if (order.isDelivered()) {
                 continue; // Skip delivered orders
@@ -126,7 +148,7 @@ public class MapRenderer {
 
             Position pos = order.getPosition();
             
-            boolean isLate = order.isOverdue(LocalDateTime.now());
+            boolean isLate = order.isOverdue(currentTime);
             
             // Use different shapes for regular and late orders
             if (!isLate) {
@@ -158,7 +180,7 @@ public class MapRenderer {
             text.setTranslateX(-text.getLayoutBounds().getWidth() / 2);
             pane.getChildren().add(text);
 
-            // Add order ID as tooltip (simplified)
+            // Add order ID as tooltip
             Text idText = new Text(pos.getX() * cellSize + cellSize / 2,
                     (pos.getY() + 1) * cellSize + 4,
                     order.getId().substring(0, Math.min(order.getId().length(), 8)));
@@ -166,6 +188,25 @@ public class MapRenderer {
             idText.setFont(Font.font("Arial", FontWeight.NORMAL, cellSize * 0.25));
             idText.setTranslateX(-idText.getLayoutBounds().getWidth() / 2);
             pane.getChildren().add(idText);
+            
+            // Add GLP requirement label
+            Text glpText = new Text(pos.getX() * cellSize + cellSize / 2,
+                    (pos.getY() + 1) * cellSize + cellSize * 0.4,
+                    String.format("GLP: %d/%d", order.getRemainingGlpM3(), order.getGlpRequestM3()));
+            glpText.setFill(Color.BLACK);
+            glpText.setFont(Font.font("Arial", FontWeight.NORMAL, cellSize * 0.25));
+            glpText.setTranslateX(-glpText.getLayoutBounds().getWidth() / 2);
+            pane.getChildren().add(glpText);
+            
+            // Add due time label with color coding
+            String timeLabel = order.getDueTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+            Text timeText = new Text(pos.getX() * cellSize + cellSize / 2,
+                    (pos.getY() + 1) * cellSize + cellSize * 0.7,
+                    "Due: " + timeLabel);
+            timeText.setFill(isLate ? LATE_ORDER_COLOR : Color.BLACK);
+            timeText.setFont(Font.font("Arial", isLate ? FontWeight.BOLD : FontWeight.NORMAL, cellSize * 0.25));
+            timeText.setTranslateX(-timeText.getLayoutBounds().getWidth() / 2);
+            pane.getChildren().add(timeText);
         }
     }
 
@@ -259,8 +300,9 @@ public class MapRenderer {
             text.setTranslateX(-text.getLayoutBounds().getWidth() / 2);
             pane.getChildren().add(text);
             
-            // Add simplified fuel indicator (small colored circle)
+            // Add detailed fuel and GLP indicators
             double fuelPercentage = vehicle.getCurrentFuelGal() / vehicle.getFuelCapacityGal();
+            fuelPercentage = Math.min(Math.max(fuelPercentage, 0.0), 1.0); // Clamp between 0 and 1
             Color fuelColor;
             
             if (fuelPercentage < 0.2) {
@@ -271,12 +313,84 @@ public class MapRenderer {
                 fuelColor = Color.GREEN;
             }
             
-            Circle fuelIndicator = new Circle(
-                centerX, 
+            // Background for fuel indicator
+            Rectangle fuelBg = new Rectangle(
+                centerX - cellSize * 0.3, 
                 centerY + cellSize * 0.4, 
-                cellSize * 0.1);
-            fuelIndicator.setFill(fuelColor);
-            pane.getChildren().add(fuelIndicator);
+                cellSize * 0.6, cellSize * 0.15);
+            fuelBg.setFill(Color.LIGHTGRAY);
+            fuelBg.setStroke(Color.BLACK);
+            fuelBg.setStrokeWidth(0.5);
+            pane.getChildren().add(fuelBg);
+            
+            // Actual fuel level indicator
+            Rectangle fuelLevel = new Rectangle(
+                centerX - cellSize * 0.3, 
+                centerY + cellSize * 0.4, 
+                cellSize * 0.6 * fuelPercentage, cellSize * 0.15);
+            fuelLevel.setFill(fuelColor);
+            pane.getChildren().add(fuelLevel);
+            
+            // Fuel text
+            Text fuelText = new Text(
+                centerX, 
+                centerY + cellSize * 0.4 + cellSize * 0.12,
+                String.format("%.1f/%.1f", vehicle.getCurrentFuelGal(), vehicle.getFuelCapacityGal()));
+            fuelText.setFill(Color.BLACK);
+            fuelText.setFont(Font.font("Arial", FontWeight.BOLD, cellSize * 0.2));
+            fuelText.setTranslateX(-fuelText.getLayoutBounds().getWidth() / 2);
+            pane.getChildren().add(fuelText);
+            
+            // GLP indicator
+            double glpPercentage = (double)vehicle.getCurrentGlpM3() / vehicle.getGlpCapacityM3();
+            glpPercentage = Math.min(Math.max(glpPercentage, 0.0), 1.0); // Clamp between 0 and 1
+            Color glpColor;
+            
+            if (glpPercentage < 0.2) {
+                glpColor = Color.LIGHTBLUE;
+            } else if (glpPercentage < 0.5) {
+                glpColor = Color.SKYBLUE;
+            } else {
+                glpColor = Color.DARKBLUE;
+            }
+            
+            // Background for GLP indicator
+            Rectangle glpBg = new Rectangle(
+                centerX - cellSize * 0.3, 
+                centerY + cellSize * 0.6, 
+                cellSize * 0.6, cellSize * 0.15);
+            glpBg.setFill(Color.LIGHTGRAY);
+            glpBg.setStroke(Color.BLACK);
+            glpBg.setStrokeWidth(0.5);
+            pane.getChildren().add(glpBg);
+            
+            // Actual GLP level indicator
+            Rectangle glpLevel = new Rectangle(
+                centerX - cellSize * 0.3, 
+                centerY + cellSize * 0.6, 
+                cellSize * 0.6 * glpPercentage, cellSize * 0.15);
+            glpLevel.setFill(glpColor);
+            pane.getChildren().add(glpLevel);
+            
+            // GLP text
+            Text glpText = new Text(
+                centerX, 
+                centerY + cellSize * 0.6 + cellSize * 0.12,
+                String.format("%d/%d", vehicle.getCurrentGlpM3(), vehicle.getGlpCapacityM3()));
+            glpText.setFill(Color.BLACK);
+            glpText.setFont(Font.font("Arial", FontWeight.BOLD, cellSize * 0.2));
+            glpText.setTranslateX(-glpText.getLayoutBounds().getWidth() / 2);
+            pane.getChildren().add(glpText);
+            
+            // Vehicle status indicator
+            Text statusText = new Text(
+                centerX,
+                centerY + cellSize * 0.8,
+                vehicle.getStatus().name());
+            statusText.setFill(Color.BLACK);
+            statusText.setFont(Font.font("Arial", FontWeight.NORMAL, cellSize * 0.2));
+            statusText.setTranslateX(-statusText.getLayoutBounds().getWidth() / 2);
+            pane.getChildren().add(statusText);
         }
     }
     
@@ -393,9 +507,21 @@ public class MapRenderer {
         LocalDateTime actionEnd = currentAction.getExpectedEndTime();
         
         if (actionStart != null && actionEnd != null) {
-            progressRatio = Math.min(1.0, 
-                (double) java.time.Duration.between(actionStart, currentTime).getSeconds() /
-                (double) java.time.Duration.between(actionStart, actionEnd).getSeconds());
+            try {
+                double totalDurationSeconds = java.time.Duration.between(actionStart, actionEnd).getSeconds();
+                if (totalDurationSeconds > 0) {
+                    double elapsedSeconds = java.time.Duration.between(actionStart, currentTime).getSeconds();
+                    progressRatio = Math.min(1.0, Math.max(0.0, elapsedSeconds / totalDurationSeconds));
+                }
+            } catch (Exception e) {
+                // If there's any exception calculating the ratio, default to drawing full path
+                progressRatio = 0.0;
+            }
+        }
+        
+        // If we couldn't calculate the progress or it's invalid, just draw the full path
+        if (Double.isNaN(progressRatio) || progressRatio < 0) {
+            progressRatio = 0.0;
         }
         
         int pathProgress = Math.min(path.size() - 1, (int) Math.floor(progressRatio * (path.size() - 1)));

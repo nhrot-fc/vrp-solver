@@ -179,8 +179,10 @@ public class SimulationApp extends Application {
     }
 
     private void initializeEnvironment(LocalDateTime startTime) {
-        Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 10000, true);
-        List<Depot> auxDepots = createAuxiliaryDepots();
+        Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 1000000, true);
+        List<Depot> auxDepots = new ArrayList<>();
+        auxDepots.add(new Depot("NORTH", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, false));
+        auxDepots.add(new Depot("EAST", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, false));
         List<Vehicle> vehicles = createVehicleFleet(mainDepot.getPosition());
 
         this.environment = new Environment(vehicles, mainDepot, auxDepots, startTime);
@@ -278,7 +280,7 @@ public class SimulationApp extends Application {
     private List<Vehicle> createVehicleFleet(Position startPosition) {
         List<Vehicle> vehicles = new ArrayList<>();
 
-        for (int i = 1; i <= 2; i++) {
+        for (int i = 1; i <= 3; i++) {
             vehicles.add(new Vehicle("TA" + i, VehicleType.TA, startPosition.clone()));
         }
 
@@ -298,17 +300,6 @@ public class SimulationApp extends Application {
         return vehicles;
     }
 
-    private List<Depot> createAuxiliaryDepots() {
-        List<Depot> auxDepots = new ArrayList<>();
-
-        // Add fuel-only depot in the north
-        auxDepots.add(new Depot("NORTH", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, false));
-        auxDepots.add(new Depot("EAST", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, false));
-
-        logger.info("Created " + auxDepots.size() + " auxiliary depots");
-        return auxDepots;
-    }
-
     private void startSimulation() {
         if (simulationTimeline != null && simulationTimeline.getStatus() == Animation.Status.RUNNING) {
             return; // Simulation already running
@@ -318,7 +309,10 @@ public class SimulationApp extends Application {
         if (orchestrator.getVehiclePlans().isEmpty()) {
             updateStatus("Running initial planning...");
             try {
-                orchestrator.initialize(); // Make sure the orchestrator is initialized
+                // Just initialize the orchestrator without starting the simulation
+                // The simulation will be advanced step by step in the timeline
+                orchestrator.initialize();
+                orchestrator.prepareSimulation();
             } catch (Exception e) {
                 updateStatus("Error during planning: " + e.getMessage());
                 logger.severe("Planning error: " + e.getMessage());
@@ -359,8 +353,8 @@ public class SimulationApp extends Application {
     }
 
     private void updateSimulationStep() {
-        // Run a single step of the simulation
-        boolean simulationContinues = orchestrator.runSimulationStep();
+        // Run a single step of the simulation using the refactored orchestrator's advanceTick method
+        boolean simulationContinues = orchestrator.advanceTick();
 
         // Update UI
         updateTimeDisplay();
@@ -452,6 +446,9 @@ public class SimulationApp extends Application {
     private void drawEnvironment() {
         mapPane.getChildren().clear();
 
+        // Get the current simulation time
+        LocalDateTime currentTime = environment.getCurrentTime();
+
         // Draw the grid
         MapRenderer.drawGrid(mapPane, GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
 
@@ -459,17 +456,17 @@ public class SimulationApp extends Application {
         MapRenderer.drawDepots(mapPane, environment.getAuxDepots(), environment.getMainDepot(), CELL_SIZE);
 
         // Draw orders
-        MapRenderer.drawOrders(mapPane, environment.getPendingOrders(), CELL_SIZE);
+        MapRenderer.drawOrders(mapPane, environment.getPendingOrders(), environment, CELL_SIZE);
 
         // Draw blockages
-        MapRenderer.drawBlockages(mapPane, environment, environment.getCurrentTime(), CELL_SIZE);
+        MapRenderer.drawBlockages(mapPane, environment, currentTime, CELL_SIZE);
 
         // Draw vehicles
         MapRenderer.drawVehicles(mapPane, environment.getAvailableVehicles(), CELL_SIZE);
 
         // Draw vehicle plans if available
         for (VehiclePlan plan : orchestrator.getVehiclePlans().values()) {
-            MapRenderer.drawCurrentVehiclePath(mapPane, plan, environment.getCurrentTime(), CELL_SIZE);
+            MapRenderer.drawCurrentVehiclePath(mapPane, plan, currentTime, CELL_SIZE);
         }
     }
 }

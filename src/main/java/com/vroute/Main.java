@@ -131,7 +131,7 @@ public class Main extends Application {
         MapRenderer.drawVehicles(mapPane, environment.getAvailableVehicles(), CELL_SIZE);
 
         // Draw orders
-        MapRenderer.drawOrders(mapPane, environment.getPendingOrders(), CELL_SIZE);
+        MapRenderer.drawOrders(mapPane, environment.getPendingOrders(), environment, CELL_SIZE);
 
         // Draw blockages
         MapRenderer.drawBlockages(mapPane, environment, environment.getCurrentTime(), CELL_SIZE);

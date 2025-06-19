@@ -196,6 +196,10 @@ public class SimulationStats {
         this.totalMaintenanceEvents++;
     }
     
+    public void incrementTotalDeliveries(int count) {
+        this.deliveredOrders += count;
+    }
+    
     public void recordBlockage(Duration duration) {
         this.totalBlockages++;
         this.totalBlockageDuration = this.totalBlockageDuration.plus(duration);

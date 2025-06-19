@@ -138,7 +138,7 @@ public class Action {
 
             case MAINTENANCE:
                 // Mantenimiento programado - estado progresivo
-                vehicle.setStatus(VehicleStatus.MAINTENANCE);
+                //vehicle.setStatus(VehicleStatus.MAINTENANCE);
                 break;
 
             case WAIT:

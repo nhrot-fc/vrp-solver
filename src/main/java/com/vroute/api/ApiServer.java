@@ -27,11 +27,13 @@ public class ApiServer {
     private final Environment environment;
     private final Orchestrator orchestrator;
     private final int port;
+    private final ApiServiceLauncher serviceLauncher;
     
-    public ApiServer(Environment environment, Orchestrator orchestrator, int port) throws IOException {
+    public ApiServer(Environment environment, Orchestrator orchestrator, ApiServiceLauncher serviceLauncher, int port) throws IOException {
         this.environment = environment;
         this.orchestrator = orchestrator;
         this.port = port;
+        this.serviceLauncher = serviceLauncher;
         
         // Create HTTP server
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -45,7 +47,7 @@ public class ApiServer {
     
     private void setupEndpoints() {
         // Main status controller for all API endpoints
-        StatusController statusController = new StatusController(environment, orchestrator);
+        StatusController statusController = new StatusController(environment, orchestrator, serviceLauncher);
         
         // API endpoints
         server.createContext("/api/status", statusController);
@@ -53,6 +55,9 @@ public class ApiServer {
         server.createContext("/api/orders", statusController);
         server.createContext("/api/blockages", statusController);
         server.createContext("/api/stats", statusController);
+        server.createContext("/api/environment", statusController);
+        server.createContext("/api/config", statusController);
+        server.createContext("/api/simulation", statusController);
         
         // Root endpoint with API documentation
         server.createContext("/", new RootHandler());
@@ -66,6 +71,9 @@ public class ApiServer {
         logger.info("  GET /api/orders    - Orders status and delivery info");
         logger.info("  GET /api/blockages - Active blockages and restrictions");
         logger.info("  GET /api/stats     - Simulation statistics");
+        logger.info("  GET /api/environment - Complete environment snapshot");
+        logger.info("  GET /api/config    - Configure simulation parameters");
+        logger.info("  GET /api/simulation - Control simulation (start/pause/adjust speed)");
         logger.info("  GET /health        - Health check");
     }
     
@@ -89,7 +97,6 @@ public class ApiServer {
      * Root handler that provides API documentation
      */
     private static class RootHandler implements HttpHandler {
-        private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -179,6 +186,30 @@ public class ApiServer {
                             <div class="description">
                                 <strong>Estadísticas de la simulación</strong><br>
                                 Métricas de rendimiento: tasas de entrega, utilización de flota, estadísticas operacionales.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">GET</span><span class="url">/api/environment</span>
+                            <div class="description">
+                                <strong>Snapshot completo del entorno</strong><br>
+                                Información completa sobre el estado actual del sistema, incluyendo vehículos, pedidos, bloqueos, y más.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">GET</span><span class="url">/api/config</span>
+                            <div class="description">
+                                <strong>Configure simulation parameters</strong><br>
+                                Endpoint for configuring simulation parameters.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">GET</span><span class="url">/api/simulation</span>
+                            <div class="description">
+                                <strong>Control simulation (start/pause/adjust speed)</strong><br>
+                                Endpoint for controlling the simulation.
                             </div>
                         </div>
                         
