@@ -25,112 +25,109 @@ public class DeliveryDistribuitor {
 
     public Solution createInitialRandomAssignments() {
         Map<Vehicle, List<DeliveryInstruction>> assignments = new HashMap<>();
-        List<Vehicle> allVehicles = environment.getAvailableVehicles();
+        List<Vehicle> availableVehicles = environment.getAvailableVehicles();
         List<Order> pendingOrders = new ArrayList<>(environment.getPendingOrders());
 
         // If there are no pending orders, return an empty solution
         if (pendingOrders.isEmpty()) {
             System.err.println("Warning: No pending orders to assign.");
             // Still create empty lists for available vehicles
-            for (Vehicle vehicle : allVehicles) {
+            for (Vehicle vehicle : availableVehicles) {
                 assignments.put(vehicle, new ArrayList<>());
             }
             return new Solution(assignments);
         }
 
         // If there are no available vehicles, return an empty solution
-        if (allVehicles.isEmpty()) {
+        if (availableVehicles.isEmpty()) {
             System.err.println("Warning: No available vehicles for assignment.");
             return new Solution(new HashMap<>());
         }
 
-        for (Vehicle vehicle : allVehicles) {
+        // Initialize assignment lists for each vehicle
+        for (Vehicle vehicle : availableVehicles) {
             assignments.put(vehicle, new ArrayList<>());
         }
 
+        // Sort orders by due time for better initial assignments
         pendingOrders.sort(Comparator.comparing(Order::getDueTime, Comparator.nullsLast(Comparator.naturalOrder())));
 
+        // Assign each order
         for (Order order : pendingOrders) {
-            int totalGlpToAssignForThisOrder = order.getRemainingGlpM3();
-            int glpAssignedSoFarForThisOrder = 0;
-
-            if (totalGlpToAssignForThisOrder <= 0) {
+            int remainingGlpToAssign = order.getRemainingGlpM3();
+            
+            // Skip if order has no remaining GLP
+            if (remainingGlpToAssign <= 0) {
                 continue;
             }
-
-            List<Vehicle> vehiclesSortedByProximity = new ArrayList<>(allVehicles);
-            final Position orderPosition = order.getPosition();
-
-            if (orderPosition == null) {
-                System.err.println("Warning: Order " + order.getId() +
-                        " has no position. Using random vehicle order for it.");
-                Collections.shuffle(vehiclesSortedByProximity, random);
-            } else {
-                vehiclesSortedByProximity.sort(Comparator.comparingDouble(v -> {
-                    Position vehiclePos = v.getCurrentPosition();
-                    return (vehiclePos != null) ? vehiclePos.distanceTo(orderPosition) : Double.MAX_VALUE;
-                }));
-            }
-
-            int currentVehicleIndexInSortedList = 0;
-
-            while (glpAssignedSoFarForThisOrder < totalGlpToAssignForThisOrder) {
-                if (vehiclesSortedByProximity.isEmpty()
-                        || currentVehicleIndexInSortedList >= vehiclesSortedByProximity.size()) {
-                    System.err.println("Warning: Unable to assign full amount for order " + order.getId() +
-                            ". Assigned " + glpAssignedSoFarForThisOrder + "/" + totalGlpToAssignForThisOrder +
-                            ". No more vehicles to try from the sorted list.");
-                    break;
-                }
-
-                Vehicle targetVehicle = vehiclesSortedByProximity.get(currentVehicleIndexInSortedList);
+            
+            // Create a probability distribution for vehicles based on proximity
+            List<Vehicle> sortedVehicles = getVehiclesSortedByProximity(availableVehicles, order);
+            
+            // Assign splits until the order is fully assigned
+            while (remainingGlpToAssign > 0) {
+                // Select a vehicle based on proximity (with some randomness)
+                Vehicle selectedVehicle = selectVehicleWithBias(sortedVehicles);
                 
-                // Get the vehicle's maximum capacity
-                int vehicleMaxCapacity = targetVehicle.getType().getCapacityM3();
+                // Determine a split amount
+                int maxSplit = Math.min(remainingGlpToAssign, selectedVehicle.getType().getCapacityM3());
+                int splitAmount;
                 
-                // Check how many assignments this vehicle already has
-                int currentVehicleAssignmentCount = assignments.get(targetVehicle).size();
-                
-                // If this vehicle already has too many assignments, try the next one
-                if (currentVehicleAssignmentCount >= 10) { // Arbitrary limit to avoid overloading vehicles
-                    currentVehicleIndexInSortedList++;
-                    continue;
-                }
-                
-                int remainingToAssignCurrently = totalGlpToAssignForThisOrder - glpAssignedSoFarForThisOrder;
-                int amountForThisInstruction;
-
-                // Consider vehicle capacity when assigning
-                if (remainingToAssignCurrently <= MIN_PRACTICAL_SPLIT_THRESHOLD) {
-                    amountForThisInstruction = remainingToAssignCurrently;
+                if (maxSplit <= MIN_PRACTICAL_SPLIT_THRESHOLD) {
+                    // If remaining amount is small, assign all of it
+                    splitAmount = maxSplit;
                 } else {
-                    int maxPossibleForVehicle = Math.min(vehicleMaxCapacity, remainingToAssignCurrently);
-                    
-                    // Ensure we're not going below our minimum threshold
-                    int effectiveMin = Math.min(MIN_PRACTICAL_SPLIT_THRESHOLD, maxPossibleForVehicle);
-                    
-                    // Calculate a random amount between min and max
-                    if (maxPossibleForVehicle > effectiveMin) {
-                        amountForThisInstruction = effectiveMin +
-                                random.nextInt(maxPossibleForVehicle - effectiveMin + 1);
-                    } else {
-                        amountForThisInstruction = maxPossibleForVehicle;
-                    }
+                    // Random split between MIN_PRACTICAL_SPLIT_THRESHOLD and maxSplit
+                    splitAmount = MIN_PRACTICAL_SPLIT_THRESHOLD + 
+                                 random.nextInt(maxSplit - MIN_PRACTICAL_SPLIT_THRESHOLD + 1);
                 }
-
-                amountForThisInstruction = Math.min(amountForThisInstruction, remainingToAssignCurrently);
-                if (remainingToAssignCurrently > 0 && amountForThisInstruction <= 0) {
-                    amountForThisInstruction = Math.min(1, remainingToAssignCurrently);
-                }
-
-                if (amountForThisInstruction > 0) {
-                    DeliveryInstruction instruction = new DeliveryInstruction(order.clone(), amountForThisInstruction);
-                    assignments.get(targetVehicle).add(instruction);
-                    glpAssignedSoFarForThisOrder += amountForThisInstruction;
-                }
-                currentVehicleIndexInSortedList++;
+                
+                // Create and add the delivery instruction
+                DeliveryInstruction instruction = new DeliveryInstruction(order.clone(), splitAmount);
+                assignments.get(selectedVehicle).add(instruction);
+                
+                // Update remaining GLP to assign
+                remainingGlpToAssign -= splitAmount;
             }
         }
+        
         return new Solution(assignments);
+    }
+    
+    /**
+     * Select a vehicle with bias towards those at the beginning of the list
+     * (which are assumed to be closer to the order)
+     */
+    private Vehicle selectVehicleWithBias(List<Vehicle> sortedVehicles) {
+        if (sortedVehicles.isEmpty()) {
+            throw new IllegalArgumentException("No vehicles available for selection");
+        }
+        
+        // Use a simple exponential bias toward the front of the list
+        double random = Math.pow(this.random.nextDouble(), 2); // Square to bias toward 0
+        int index = (int)(random * sortedVehicles.size());
+        return sortedVehicles.get(Math.min(index, sortedVehicles.size() - 1));
+    }
+    
+    /**
+     * Get vehicles sorted by proximity to order
+     */
+    private List<Vehicle> getVehiclesSortedByProximity(List<Vehicle> vehicles, Order order) {
+        List<Vehicle> sortedVehicles = new ArrayList<>(vehicles);
+        final Position orderPosition = order.getPosition();
+        
+        if (orderPosition == null) {
+            // If order has no position, shuffle randomly
+            Collections.shuffle(sortedVehicles, random);
+            return sortedVehicles;
+        }
+        
+        // Sort by distance to the order
+        sortedVehicles.sort(Comparator.comparingDouble(v -> {
+            Position vehiclePosition = v.getCurrentPosition();
+            return (vehiclePosition != null) ? vehiclePosition.distanceTo(orderPosition) : Double.MAX_VALUE;
+        }));
+        
+        return sortedVehicles;
     }
 }

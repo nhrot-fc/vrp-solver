@@ -280,6 +280,80 @@ public class MapRenderer {
         }
     }
     
+    public static void drawVehiclePlan(Pane pane, VehiclePlan plan, int cellSize) {
+        Vehicle vehicle = plan.getVehicle();
+        List<Action> actions = plan.getActions();
+
+        // Get color for the vehicle
+        int colorIndex = Math.abs(vehicle.getId().hashCode()) % VEHICLE_COLORS.length;
+        Color color = VEHICLE_COLORS[colorIndex];
+
+        Position currentPos = vehicle.getCurrentPosition();
+
+        // Draw each action
+        for (Action action : actions) {
+            ActionType type = action.getType();
+
+            if (type == ActionType.DRIVE) {
+                List<Position> path = action.getPath();
+
+                if (path != null && !path.isEmpty()) {
+                    // Draw simple solid line for the path
+                    Position from = currentPos;
+
+                    for (Position to : path) {
+                        Line line = new Line(
+                                from.getX() * cellSize + cellSize / 2,
+                                from.getY() * cellSize + cellSize / 2,
+                                to.getX() * cellSize + cellSize / 2,
+                                to.getY() * cellSize + cellSize / 2);
+
+                        line.setStroke(color);
+                        line.setStrokeWidth(2);
+                        pane.getChildren().add(line);
+
+                        from = to;
+                    }
+
+                    currentPos = path.get(path.size() - 1);
+                }
+            } else if (type == ActionType.SERVE) {
+                // Mark serving locations with a simple X
+                Order order = action.getOrder();
+                if (order != null) {
+                    Position orderPos = order.getPosition();
+                    double x = orderPos.getX() * cellSize + cellSize / 2;
+                    double y = orderPos.getY() * cellSize + cellSize / 2;
+                    double size = cellSize * 0.2;
+                    
+                    Line line1 = new Line(x - size, y - size, x + size, y + size);
+                    Line line2 = new Line(x + size, y - size, x - size, y + size);
+                    line1.setStroke(color);
+                    line2.setStroke(color);
+                    line1.setStrokeWidth(2);
+                    line2.setStrokeWidth(2);
+                    
+                    pane.getChildren().addAll(line1, line2);
+                    currentPos = orderPos;
+                }
+            } else if (type == ActionType.REFUEL || type == ActionType.RELOAD) {
+                // Mark depot operations with a simple circle
+                Position depotPos = action.getDestination();
+                Circle circle = new Circle(
+                        depotPos.getX() * cellSize + cellSize / 2,
+                        depotPos.getY() * cellSize + cellSize / 2,
+                        cellSize * 0.2);
+
+                circle.setFill(Color.TRANSPARENT);
+                circle.setStroke(color);
+                circle.setStrokeWidth(1.5);
+                pane.getChildren().add(circle);
+
+                currentPos = depotPos;
+            }
+        }
+    }
+    
     /**
      * Draws only the current path a vehicle is following based on its current action
      * instead of drawing the entire vehicle plan.

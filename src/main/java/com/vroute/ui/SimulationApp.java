@@ -302,8 +302,8 @@ public class SimulationApp extends Application {
         List<Depot> auxDepots = new ArrayList<>();
 
         // Add fuel-only depot in the north
-        auxDepots.add(new Depot("NORTH", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 250, false));
-        auxDepots.add(new Depot("EAST", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 250, false));
+        auxDepots.add(new Depot("NORTH", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, false));
+        auxDepots.add(new Depot("EAST", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, false));
 
         logger.info("Created " + auxDepots.size() + " auxiliary depots");
         return auxDepots;

@@ -142,7 +142,7 @@ public class Main extends Application {
 
         // Draw each vehicle's plan
         for (VehiclePlan plan : vehiclePlans.values()) {
-            MapRenderer.drawCurrentVehiclePath(mapPane, plan, environment.getCurrentTime(), CELL_SIZE);
+            MapRenderer.drawVehiclePlan(mapPane, plan, CELL_SIZE);
         }
     }
 
@@ -224,7 +224,7 @@ public class Main extends Application {
         int maxX = GRID_WIDTH - 3;
         int maxY = GRID_HEIGHT - 3;
 
-        for (int i = 1; i <= 10; i++) {
+        for (int i = 1; i <= 100; i++) {
             String orderId = String.format("ORD-%03d", i);
             int posX = 2 + random.nextInt(maxX);
             int posY = 2 + random.nextInt(maxY);
