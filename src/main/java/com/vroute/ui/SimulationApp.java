@@ -469,7 +469,7 @@ public class SimulationApp extends Application {
 
         // Draw vehicle plans if available
         for (VehiclePlan plan : orchestrator.getVehiclePlans().values()) {
-            MapRenderer.drawVehiclePlan(mapPane, plan, CELL_SIZE);
+            MapRenderer.drawCurrentVehiclePath(mapPane, plan, environment.getCurrentTime(), CELL_SIZE);
         }
     }
 }

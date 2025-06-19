@@ -142,7 +142,7 @@ public class Main extends Application {
 
         // Draw each vehicle's plan
         for (VehiclePlan plan : vehiclePlans.values()) {
-            MapRenderer.drawVehiclePlan(mapPane, plan, CELL_SIZE);
+            MapRenderer.drawCurrentVehiclePath(mapPane, plan, environment.getCurrentTime(), CELL_SIZE);
         }
     }
 

@@ -279,78 +279,88 @@ public class MapRenderer {
             pane.getChildren().add(fuelIndicator);
         }
     }
-
-    public static void drawVehiclePlan(Pane pane, VehiclePlan plan, int cellSize) {
+    
+    /**
+     * Draws only the current path a vehicle is following based on its current action
+     * instead of drawing the entire vehicle plan.
+     * 
+     * @param pane  The pane to draw on
+     * @param plan  The vehicle plan containing the actions
+     * @param currentTime The current time to determine which action is active
+     * @param cellSize The size of each cell on the grid
+     */
+    public static void drawCurrentVehiclePath(Pane pane, VehiclePlan plan, LocalDateTime currentTime, int cellSize) {
+        if (plan == null) {
+            return;
+        }
+        
         Vehicle vehicle = plan.getVehicle();
-        List<Action> actions = plan.getActions();
-
+        Action currentAction = plan.getActionAt(currentTime);
+        
+        if (currentAction == null || currentAction.getType() != ActionType.DRIVE) {
+            return; // No current driving action to draw
+        }
+        
         // Get color for the vehicle
         int colorIndex = Math.abs(vehicle.getId().hashCode()) % VEHICLE_COLORS.length;
         Color color = VEHICLE_COLORS[colorIndex];
-
-        Position currentPos = vehicle.getCurrentPosition();
-
-        // Draw each action
-        for (Action action : actions) {
-            ActionType type = action.getType();
-
-            if (type == ActionType.DRIVE) {
-                List<Position> path = action.getPath();
-
-                if (path != null && !path.isEmpty()) {
-                    // Draw simple solid line for the path
-                    Position from = currentPos;
-
-                    for (Position to : path) {
-                        Line line = new Line(
-                                from.getX() * cellSize + cellSize / 2,
-                                from.getY() * cellSize + cellSize / 2,
-                                to.getX() * cellSize + cellSize / 2,
-                                to.getY() * cellSize + cellSize / 2);
-
-                        line.setStroke(color);
-                        line.setStrokeWidth(2);
-                        pane.getChildren().add(line);
-
-                        from = to;
-                    }
-
-                    currentPos = path.get(path.size() - 1);
-                }
-            } else if (type == ActionType.SERVE) {
-                // Mark serving locations with a simple X
-                Order order = action.getOrder();
-                if (order != null) {
-                    Position orderPos = order.getPosition();
-                    double x = orderPos.getX() * cellSize + cellSize / 2;
-                    double y = orderPos.getY() * cellSize + cellSize / 2;
-                    double size = cellSize * 0.2;
-                    
-                    Line line1 = new Line(x - size, y - size, x + size, y + size);
-                    Line line2 = new Line(x + size, y - size, x - size, y + size);
-                    line1.setStroke(color);
-                    line2.setStroke(color);
-                    line1.setStrokeWidth(2);
-                    line2.setStrokeWidth(2);
-                    
-                    pane.getChildren().addAll(line1, line2);
-                    currentPos = orderPos;
-                }
-            } else if (type == ActionType.REFUEL || type == ActionType.RELOAD) {
-                // Mark depot operations with a simple circle
-                Position depotPos = action.getDestination();
-                Circle circle = new Circle(
-                        depotPos.getX() * cellSize + cellSize / 2,
-                        depotPos.getY() * cellSize + cellSize / 2,
-                        cellSize * 0.2);
-
-                circle.setFill(Color.TRANSPARENT);
-                circle.setStroke(color);
-                circle.setStrokeWidth(1.5);
-                pane.getChildren().add(circle);
-
-                currentPos = depotPos;
-            }
+        
+        // Draw only the current driving path
+        List<Position> path = currentAction.getPath();
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        
+        // Calculate progress along the current path
+        double progressRatio = 0.0;
+        
+        // Calculate the start time of the current action
+        LocalDateTime actionStart = currentAction.getExpectedStartTime();
+        LocalDateTime actionEnd = currentAction.getExpectedEndTime();
+        
+        if (actionStart != null && actionEnd != null) {
+            progressRatio = Math.min(1.0, 
+                (double) java.time.Duration.between(actionStart, currentTime).getSeconds() /
+                (double) java.time.Duration.between(actionStart, actionEnd).getSeconds());
+        }
+        
+        int pathProgress = Math.min(path.size() - 1, (int) Math.floor(progressRatio * (path.size() - 1)));
+        
+        // Draw the path up to the current position
+        Position from = path.get(0);
+        for (int i = 1; i <= pathProgress; i++) {
+            Position to = path.get(i);
+            
+            Line line = new Line(
+                    from.getX() * cellSize + cellSize / 2,
+                    from.getY() * cellSize + cellSize / 2,
+                    to.getX() * cellSize + cellSize / 2,
+                    to.getY() * cellSize + cellSize / 2);
+            
+            line.setStroke(color);
+            line.setStrokeWidth(2);
+            pane.getChildren().add(line);
+            
+            from = to;
+        }
+        
+        // Draw a dashed line for the remaining path
+        for (int i = pathProgress + 1; i < path.size(); i++) {
+            Position to = path.get(i);
+            
+            Line line = new Line(
+                    from.getX() * cellSize + cellSize / 2,
+                    from.getY() * cellSize + cellSize / 2,
+                    to.getX() * cellSize + cellSize / 2,
+                    to.getY() * cellSize + cellSize / 2);
+            
+            line.setStroke(color);
+            line.setStrokeWidth(1.5);
+            line.getStrokeDashArray().addAll(5.0, 5.0); // Make it dashed
+            line.setOpacity(0.6); // Make it semi-transparent
+            pane.getChildren().add(line);
+            
+            from = to;
         }
     }
 }
