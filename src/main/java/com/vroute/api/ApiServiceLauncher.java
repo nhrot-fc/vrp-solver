@@ -2,7 +2,6 @@ package com.vroute.api;
 
 import com.vroute.models.*;
 import com.vroute.orchest.*;
-import com.vroute.pathfinding.Grid;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,8 +18,6 @@ public class ApiServiceLauncher {
     private static final Logger logger = Logger.getLogger(ApiServiceLauncher.class.getName());
     
     private static final int DEFAULT_PORT = 8080;
-    private static final int GRID_WIDTH = 70;
-    private static final int GRID_HEIGHT = 50;
     
     private Environment environment;
     private Orchestrator orchestrator;
@@ -67,9 +64,6 @@ public class ApiServiceLauncher {
     private void createEnvironment() {
         LocalDateTime startTime = LocalDateTime.now().withHour(8).withMinute(0).withSecond(0).withNano(0);
         
-        // Create grid
-        Grid grid = new Grid(GRID_WIDTH, GRID_HEIGHT);
-        
         // Create main depot
         Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 10000, true);
         mainDepot.refillGLP(); // Start with full capacity
@@ -81,7 +75,7 @@ public class ApiServiceLauncher {
         List<Vehicle> vehicles = createVehicleFleet();
         
         // Create environment
-        environment = new Environment(grid, vehicles, mainDepot, auxDepots, startTime);
+        environment = new Environment(vehicles, mainDepot, auxDepots, startTime);
         
         logger.info("Environment created with " + vehicles.size() + " vehicles and " + auxDepots.size() + " auxiliary depots");
     }

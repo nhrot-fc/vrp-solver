@@ -5,7 +5,6 @@ import com.vroute.assignation.Solution;
 import com.vroute.models.*;
 import com.vroute.operation.VehiclePlan;
 import com.vroute.operation.VehiclePlanCreator;
-import com.vroute.pathfinding.Grid;
 import com.vroute.ui.MapRenderer;
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -148,12 +147,11 @@ public class Main extends Application {
     }
 
     private void initializeSimulationEnvironment(LocalDateTime simulationStartTime) {
-        Grid grid = new Grid(GRID_WIDTH, GRID_HEIGHT);
         Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 10000, true);
         List<Depot> auxDepots = createAuxiliaryDepots();
         List<Vehicle> vehicles = createSampleVehicles(mainDepot.getPosition());
 
-        this.environment = new Environment(grid, vehicles, mainDepot, auxDepots, simulationStartTime);
+        this.environment = new Environment(vehicles, mainDepot, auxDepots, simulationStartTime);
         createAndAddSampleOrders(this.environment, simulationStartTime);
         // Usar una semilla específica para la generación de bloqueos
         createAndAddRandomBlockages(this.environment, simulationStartTime);

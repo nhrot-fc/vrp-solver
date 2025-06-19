@@ -6,10 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.vroute.pathfinding.Grid;
-
 public class Environment {
-    private final Grid grid;
     private final List<Vehicle> vehicles;
     private final Depot mainDepot;
     private final List<Depot> auxDepots;
@@ -20,9 +17,8 @@ public class Environment {
     private final List<Incident> incidentRegistry;
     private final List<MaintenanceTask> maintenanceTasks;
 
-    public Environment(Grid grid, List<Vehicle> vehicles, Depot mainDepot, List<Depot> auxDepots,
+    public Environment(List<Vehicle> vehicles, Depot mainDepot, List<Depot> auxDepots,
             LocalDateTime referenceDateTime) {
-        this.grid = grid;
         this.currentTime = referenceDateTime;
         this.vehicles = new ArrayList<>(vehicles);
         this.mainDepot = mainDepot;
@@ -31,10 +27,6 @@ public class Environment {
         this.activeBlockages = new ArrayList<>();
         this.incidentRegistry = new ArrayList<>();
         this.maintenanceTasks = new ArrayList<>();
-    }
-
-    public Grid getGrid() {
-        return grid;
     }
 
     public List<Vehicle> getVehicles() {
@@ -119,39 +111,6 @@ public class Environment {
         return activeBlockages.stream()
                 .filter(b -> b.isActiveAt(dateTime))
                 .collect(Collectors.toList());
-    }
-
-    public boolean isNodeBlocked(Position position, LocalDateTime dateTime) {
-        for (Blockage blockage : getActiveBlockagesAt(dateTime)) {
-            List<Position> blockagePoints = blockage.getBlockagePoints();
-            for (Position p : blockagePoints) {
-                if (p.equals(position)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public boolean isPathBlocked(Position from, Position to, LocalDateTime dateTime) {
-        // Check if either node is blocked
-        if (isNodeBlocked(from, dateTime) || isNodeBlocked(to, dateTime)) {
-            return true;
-        }
-
-        for (Blockage blockage : getActiveBlockagesAt(dateTime)) {
-            // Check if the direct path segment (from-to) is part of this specific blockage
-            List<Position> blockagePoints = blockage.getBlockagePoints();
-            for (int i = 0; i < blockagePoints.size() - 1; i++) {
-                Position p1 = blockagePoints.get(i);
-                Position p2 = blockagePoints.get(i + 1);
-                // Check both directions for the segment
-                if ((p1.equals(from) && p2.equals(to)) || (p1.equals(to) && p2.equals(from))) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     public void addIncident(Incident incident) {

@@ -173,7 +173,7 @@ public class MapRenderer {
         List<Blockage> activeBlockages = environment.getActiveBlockagesAt(currentTime);
 
         for (Blockage blockage : activeBlockages) {
-            List<Position> blockagePoints = blockage.getBlockagePoints();
+            List<Position> blockagePoints = blockage.getLines();
 
             // Only draw lines connecting blockage points (black lines)
             for (int i = 0; i < blockagePoints.size() - 1; i++) {

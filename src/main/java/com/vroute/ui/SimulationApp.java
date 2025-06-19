@@ -6,7 +6,6 @@ import com.vroute.orchest.DataReader;
 import com.vroute.orchest.Event;
 import com.vroute.orchest.EventType;
 import com.vroute.orchest.Orchestrator;
-import com.vroute.pathfinding.Grid;
 
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
@@ -180,12 +179,11 @@ public class SimulationApp extends Application {
     }
 
     private void initializeEnvironment(LocalDateTime startTime) {
-        Grid grid = new Grid(GRID_WIDTH, GRID_HEIGHT);
         Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 10000, true);
         List<Depot> auxDepots = createAuxiliaryDepots();
         List<Vehicle> vehicles = createVehicleFleet(mainDepot.getPosition());
 
-        this.environment = new Environment(grid, vehicles, mainDepot, auxDepots, startTime);
+        this.environment = new Environment(vehicles, mainDepot, auxDepots, startTime);
     }
 
     private void loadDataFromFiles(LocalDateTime startTime) {
@@ -238,8 +236,8 @@ public class SimulationApp extends Application {
                 }
                 
                 // Add events to orchestrator
-                //eventList.addAll(blockageEvents);
-                //environment.addBlockages(blockages);
+                eventList.addAll(blockageEvents);
+                environment.addBlockages(blockages);
                 updateStatus("Created " + (blockages.size() * 2) + " blockage events for " + blockages.size() + " blockages");
                 logger.info("Loaded " + blockages.size() + " blockages from " + blockagesFile.getPath());
             } else {

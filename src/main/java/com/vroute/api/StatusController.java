@@ -3,7 +3,6 @@ package com.vroute.api;
 import com.vroute.models.*;
 import com.vroute.orchest.Orchestrator;
 import com.vroute.operation.VehiclePlan;
-import com.vroute.orchest.SimulationStats;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -255,7 +254,7 @@ public class StatusController implements HttpHandler {
             json.append("      \"isActive\": ").append(blockage.isActiveAt(currentTime)).append(",\n");
             json.append("      \"points\": [\n");
             
-            List<Position> points = blockage.getBlockagePoints();
+            List<Position> points = blockage.getLines();
             for (int j = 0; j < points.size(); j++) {
                 Position point = points.get(j);
                 json.append("        {\n");

@@ -25,6 +25,13 @@ public class Position {
         return x == position.x && y == position.y;
     }
 
+    @Override
+    public int hashCode() {
+        int result = Integer.hashCode(x);
+        result = 31 * result + Integer.hashCode(y);
+        return result;
+    }
+
     public Position clone() { return new Position(x, y);}
 
     public double distanceTo(Position other) {

@@ -1,102 +1,137 @@
 package com.vroute.pathfinding;
 
-import com.vroute.models.Position;
 import com.vroute.models.Environment;
+import com.vroute.models.Position;
+import com.vroute.models.Blockage;
 import com.vroute.models.Constants;
+
 import java.time.LocalDateTime;
 import java.util.*;
 
 public class PathFinder {
-    private static final double EDGE_WEIGHT_KM = Constants.NODE_DISTANCE;
-    private static final double VEHICLE_SPEED_KMPH = Constants.VEHICLE_AVG_SPEED;
-    private static final double TIME_PER_EDGE_SECONDS = 3600 * EDGE_WEIGHT_KM / VEHICLE_SPEED_KMPH;
-
-    // Private constructor to prevent instantiation
-    private PathFinder() {
-        // This class should not be instantiated
-    }
-
-    public static List<Position> findPath(Environment environment, Position startPos, Position endPos,
-            LocalDateTime startTime) {
-        Grid grid = environment.getGrid();
-        Node startNode = grid.getNode(startPos.getX(), startPos.getY());
-        Node endNode = grid.getNode(endPos.getX(), endPos.getY());
-
-        if (startNode == null || endNode == null) {
-            return new ArrayList<>();
+    public static List<Position> findPath(Environment entorno, Position inicio, Position fin, LocalDateTime horaSalida) {
+        if (inicio == null || fin == null || horaSalida == null || entorno == null) {
+            return Collections.emptyList();
         }
-
-        if (environment.isNodeBlocked(startPos, startTime) || environment.isNodeBlocked(endPos, startTime)) {
-            return new ArrayList<>();
+        if (inicio.equals(fin)) {
+            return Collections.singletonList(inicio);
         }
-
-        for (int x = 0; x < grid.getWidth(); x++) {
-            for (int y = 0; y < grid.getHeight(); y++) {
-                grid.getNode(x, y).reset();
-            }
+        if (esBloqueado(inicio, horaSalida, entorno)) {
+            return Collections.emptyList();
         }
 
         PriorityQueue<Node> openSet = new PriorityQueue<>();
-        Set<Node> closedSet = new HashSet<>();
+        Map<Position, Node> posicionANodo = new HashMap<>();
+        Set<Position> closedSet = new HashSet<>();
 
-        startNode.gCost = 0;
-        startNode.hCost = calculateHeuristic(startNode, endNode);
-        startNode.timeAtNode = startTime;
-        startNode.calculateFCost();
+        Node startNode = new Node(inicio, null, 0, heuristica(inicio, fin), horaSalida);
         openSet.add(startNode);
+        posicionANodo.put(inicio, startNode);
+
+        int[][] direcciones = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
 
         while (!openSet.isEmpty()) {
-            Node currentNode = openSet.poll();
+            Node current = openSet.poll();
 
-            if (currentNode.equals(endNode)) {
-                return reconstructPath(currentNode);
+            if (current.posicion.equals(fin)) {
+                return construirResultado(current);
             }
 
-            closedSet.add(currentNode);
+            closedSet.add(current.posicion);
 
-            for (Node neighbor : grid.getNeighbors(currentNode)) {
-                if (closedSet.contains(neighbor)) {
+            for (int[] dir : direcciones) {
+                int newX = current.posicion.getX() + dir[0];
+                int newY = current.posicion.getY() + dir[1];
+
+                if (newX < 0 || newX >= Constants.CITY_LENGTH_X ||
+                        newY < 0 || newY >= Constants.CITY_WIDTH_Y) {
                     continue;
                 }
 
-                LocalDateTime timeAtNeighbor = currentNode.timeAtNode.plusSeconds((long) TIME_PER_EDGE_SECONDS);
-                if (environment.isNodeBlocked(neighbor.position, timeAtNeighbor) ||
-                        environment.isPathBlocked(currentNode.position, neighbor.position, timeAtNeighbor)) {
+                Position vecino = new Position(newX, newY);
+
+                if (closedSet.contains(vecino)) {
                     continue;
                 }
 
-                double tentativeGCost = currentNode.gCost + EDGE_WEIGHT_KM;
+                LocalDateTime tiempoLlegada = calcularTiempoLlegada(current.horaDeLlegada, 1);
 
-                if (tentativeGCost < neighbor.gCost) {
-                    neighbor.parent = currentNode;
-                    neighbor.gCost = tentativeGCost;
-                    neighbor.hCost = calculateHeuristic(neighbor, endNode);
-                    neighbor.timeAtNode = timeAtNeighbor;
-                    neighbor.calculateFCost();
+                if (esBloqueado(vecino, tiempoLlegada, entorno)) {
+                    continue;
+                }
 
-                    if (!openSet.contains(neighbor)) {
-                        openSet.add(neighbor);
+                double newG = current.g + 1;
+
+                Node vecinoNode = posicionANodo.get(vecino);
+                if (vecinoNode == null || newG < vecinoNode.g) {
+                    double h = heuristica(vecino, fin);
+                    Node newNode = new Node(vecino, current, newG, h, tiempoLlegada);
+
+                    if (vecinoNode != null) {
+                        openSet.remove(vecinoNode);
                     }
+
+                    openSet.add(newNode);
+                    posicionANodo.put(vecino, newNode);
                 }
             }
         }
 
-        return new ArrayList<>();
+        return Collections.emptyList();
     }
 
-    private static double calculateHeuristic(Node a, Node b) {
-        return (Math.abs(a.position.getX() - b.position.getX()) +
-                Math.abs(a.position.getY() - b.position.getY())) * EDGE_WEIGHT_KM;
-    }
-
-    private static List<Position> reconstructPath(Node endNode) {
-        List<Position> path = new ArrayList<>();
-        Node currentNode = endNode;
-        while (currentNode != null) {
-            path.add(currentNode.position);
-            currentNode = currentNode.parent;
+    private static boolean esBloqueado(Position posicion, LocalDateTime momento, Environment entorno) {
+        List<Blockage> bloqueosActivos = entorno.getActiveBlockagesAt(momento);
+        for (Blockage bloqueo : bloqueosActivos) {
+            if (bloqueo.posicionEstaBloqueada(posicion, momento)) {
+                return true;
+            }
         }
-        Collections.reverse(path);
-        return path;
+        return false;
+    }
+
+    private static LocalDateTime calcularTiempoLlegada(LocalDateTime horaSalida, double distanciaKm) {
+        long segundosViaje = (long) (distanciaKm / Constants.VEHICLE_AVG_SPEED * 3600);
+        return horaSalida.plusSeconds(segundosViaje);
+    }
+
+    private static double heuristica(Position a, Position b) {
+        return a.distanceTo(b);
+    }
+
+    private static List<Position> construirResultado(Node destinoNode) {
+
+        List<Position> camino = new LinkedList<>();
+
+        Node current = destinoNode;
+
+        while (current != null) {
+            camino.add(0, current.posicion);
+            current = current.parent;
+        }
+
+        return camino;
+    }
+
+    // Clase interna para los nodos de A*, ahora con tiempo
+    private static class Node implements Comparable<Node> {
+        final Position posicion;
+        final Node parent;
+        final double g;
+        final double f;
+        final LocalDateTime horaDeLlegada;
+
+        Node(Position posicion, Node parent, double g, double h, LocalDateTime horaDeLlegada) {
+            this.posicion = posicion;
+            this.parent = parent;
+            this.g = g;
+            this.f = g + h;
+            this.horaDeLlegada = horaDeLlegada;
+        }
+
+        @Override
+        public int compareTo(Node other) {
+            return Double.compare(this.f, other.f);
+        }
     }
 }
