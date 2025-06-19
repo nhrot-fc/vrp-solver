@@ -26,7 +26,6 @@ public class Orchestrator {
     private SimulationStats stats;
 
     private boolean needsReplanning;
-    private LocalDateTime lastPlanningTime;
 
     // Tick counter for replanning
     private int tickCounter;
@@ -41,7 +40,6 @@ public class Orchestrator {
         this.config = AlgorithmConfig.createDefault();
         this.stats = new SimulationStats();
         this.needsReplanning = false;
-        this.lastPlanningTime = null;
         this.tickCounter = 0;
         this.ticksPerReplan = 90;
     }
@@ -96,7 +94,6 @@ public class Orchestrator {
         // Only replan if we have both orders and vehicles
         if ((needsReplanning || tickBasedReplanning) && !environment.getAvailableVehicles().isEmpty()) {
             replanVehicles();
-            lastPlanningTime = simulationTime;
             needsReplanning = false;
             tickCounter = 0; // Reset tick counter after replanning
             stats.incrementTotalReplans(); // Update stats
@@ -332,8 +329,6 @@ public class Orchestrator {
     }
 
     public void initialize() {
-        this.lastPlanningTime = this.simulationTime;
-
         // Add a simulation end event based on config.getSimulationMaxDays()
         LocalDateTime endTime = this.simulationTime.plusDays(config.getSimulationMaxDays());
         Event endEvent = new Event(EventType.SIMULATION_END, endTime);
