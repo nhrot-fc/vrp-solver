@@ -11,12 +11,12 @@ import java.util.Random;
 
 public class MetaheuristicAssignator implements Assignator {
 
-    private static final int DEFAULT_MAX_ITERATIONS = 3000;
-    private static final int DEFAULT_TABU_LIST_SIZE = 25;
-    private static final int DEFAULT_NUM_NEIGHBORS = 100;
-    private static final int DIVERSIFICATION_FACTOR = 2;
+    private static final int DEFAULT_MAX_ITERATIONS = 1500;
+    private static final int DEFAULT_TABU_LIST_SIZE = 50;
+    private static final int DEFAULT_NUM_NEIGHBORS = 50;
+    private static final int DIVERSIFICATION_FACTOR = 4;
     private static final int REPORT_INTERVAL = 100;
-    private static final int DETAILED_REPORT_INTERVAL = 500;
+    private static final int DETAILED_REPORT_INTERVAL = 250;
     private static final double TEMPERATURE_INITIAL = 100.0;
     private static final double TEMPERATURE_DECAY = 0.995;
     private static final double MINIMUM_SOLUTION_IMPROVEMENT = 0.001;

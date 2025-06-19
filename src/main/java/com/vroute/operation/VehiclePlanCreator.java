@@ -39,8 +39,7 @@ import java.util.List;
  * 9. At Customer: 15 min for GLP discharge (README 3.4).
  * 10. At Depot (Plant): 15 min for "Routine Maintenance to Exit" (README 3.4).
  * 11. Refueling (Fuel): 10 min (assumed). // Constants.REFUEL_DURATION_MINUTES
- * 12. Refilling (GLP): 10 min (assumed). //
- * Constants.DEPOT_GLP_TRANSFER_TIME_MINUTES
+ * 12. Refilling (GLP): 10 min (assumed). // Constants.DEPOT_GLP_TRANSFER_TIME_MINUTES
  *
  * Routing & Order Fulfillment:
  * 13. End of Plan: Typically at a plant, implied by "Routine Maintenance to
@@ -213,48 +212,84 @@ public class VehiclePlanCreator {
                 DeliveryInstruction inst = instructions.get(i);
                 Order order = inst.getOriginalOrder().clone();
                 Position orderPos = order.getPosition();
-                int glpNeeded = currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3();
-
-                if (currentVehicle.getCurrentGlpM3() < glpNeeded) {
-                    LocalDateTime updatedTime = processGlpSupply(environment, currentVehicle, glpNeeded, currentTime,
-                            actions);
-                    if (updatedTime == null) {
-                        return null;
+                
+                // Check if we need to refill GLP for this delivery
+                if (currentVehicle.getCurrentGlpM3() < inst.getGlpAmountToDeliver()) {
+                    // Calculate how much GLP we need considering remaining deliveries
+                    int remainingInstructionsIndex = i;
+                    int totalRemainingGlp = 0;
+                    
+                    // Calculate total remaining GLP needs up to vehicle capacity
+                    while (remainingInstructionsIndex < instructions.size() &&
+                           totalRemainingGlp + instructions.get(remainingInstructionsIndex).getGlpAmountToDeliver() <= currentVehicle.getGlpCapacityM3()) {
+                        totalRemainingGlp += instructions.get(remainingInstructionsIndex).getGlpAmountToDeliver();
+                        remainingInstructionsIndex++;
                     }
-                    currentTime = updatedTime;
+                    
+                    // Calculate needed GLP considering vehicle's current level
+                    int glpNeeded = totalRemainingGlp - currentVehicle.getCurrentGlpM3();
+                    glpNeeded = Math.max(0, glpNeeded); // Ensure non-negative
+
+                    if (glpNeeded > 0) {
+                        LocalDateTime updatedTime = processGlpSupply(environment, currentVehicle, glpNeeded, currentTime, actions);
+                        if (updatedTime == null) {
+                            // Failed to get GLP supply, try next instruction
+                            continue;
+                        }
+                        currentTime = updatedTime;
+                    }
                 }
 
+                // Check if we can reach the customer
                 if (!canReach(environment, currentVehicle, orderPos, currentTime)) {
+                    // Try to refuel first
                     LocalDateTime updatedTime = processFuelSupply(environment, currentVehicle, currentTime, actions);
                     if (updatedTime == null) {
-                        return null;
+                        // Failed to refuel, skip this instruction and try the next one
+                        continue;
                     }
                     currentTime = updatedTime;
 
+                    // Check again if we can reach the customer after refueling
                     if (!canReach(environment, currentVehicle, orderPos, currentTime)) {
-                        return null;
+                        // Still can't reach - might be due to blockages
+                        continue;
                     }
                 }
 
-                currentTime = driveToLocation(environment, currentVehicle, orderPos, currentTime, actions);
+                try {
+                    // Try to drive to the customer location
+                    currentTime = driveToLocation(environment, currentVehicle, orderPos, currentTime, actions);
 
-                Action servingAction = ActionFactory.createServingAction(
-                        orderPos,
-                        order,
-                        inst.getGlpAmountToDeliver(),
-                        currentTime);
-                actions.add(servingAction);
+                    // Serve the order
+                    Action servingAction = ActionFactory.createServingAction(
+                            orderPos,
+                            order,
+                            inst.getGlpAmountToDeliver(),
+                            currentTime);
+                    actions.add(servingAction);
 
-                currentVehicle.dispenseGlp(inst.getGlpAmountToDeliver());
-                currentTime = currentTime.plus(servingAction.getDuration());
+                    currentVehicle.dispenseGlp(inst.getGlpAmountToDeliver());
+                    currentTime = currentTime.plus(servingAction.getDuration());
+                } catch (NoPathFoundException e) {
+                    // Path blocked, skip this instruction and continue
+                    System.err.println("Path blocked to customer " + order.getId() + ": " + e.getMessage());
+                    continue;
+                } catch (InsufficientFuelException e) {
+                    // Should not happen since we checked canReach, but handle just in case
+                    System.err.println("Unexpected fuel error: " + e.getMessage());
+                    continue;
+                }
             }
 
             if (!instructions.isEmpty()) {
+                // Return to main depot at the end if we had any instructions
                 Position mainDepotPos = mainDepot.getPosition();
 
                 if (!canReach(environment, currentVehicle, mainDepotPos, currentTime)) {
                     LocalDateTime updatedTime = processFuelSupply(environment, currentVehicle, currentTime, actions);
                     if (updatedTime == null) {
+                        // If we can't refuel to get back to depot, the plan is not viable
                         return null;
                     }
                     currentTime = updatedTime;
