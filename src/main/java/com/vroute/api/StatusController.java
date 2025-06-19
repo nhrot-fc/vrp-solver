@@ -51,85 +51,78 @@ public class StatusController implements HttpHandler {
             return;
         }
         
-        // Special case for the config endpoint which supports both GET and POST
-        if (path.equals("/api/config")) {
-            if ("GET".equals(method)) {
-                String response = getSimulationConfig();
-                sendResponse(exchange, 200, response);
-                return;
-            } else if ("POST".equals(method)) {
-                String requestBody = readRequestBody(exchange);
-                try {
-                    handleConfigUpdate(requestBody);
-                    String response = "{\"status\":\"success\",\"message\":\"Configuration updated\"}";
-                    sendResponse(exchange, 200, response);
-                    return;
-                } catch (Exception e) {
-                    sendErrorResponse(exchange, 400, "Invalid configuration: " + e.getMessage());
-                    return;
-                }
-            } else {
-                sendErrorResponse(exchange, 405, "Method not allowed");
-                return;
-            }
-        }
-        
-        // Special case for simulation control endpoint
-        if (path.equals("/api/simulation")) {
-            if ("GET".equals(method)) {
-                String response = getSimulationStatus();
-                sendResponse(exchange, 200, response);
-                return;
-            } else if ("POST".equals(method)) {
-                String requestBody = readRequestBody(exchange);
-                try {
-                    handleSimulationControl(requestBody);
-                    String response = "{\"status\":\"success\",\"message\":\"Simulation control applied\"}";
-                    sendResponse(exchange, 200, response);
-                    return;
-                } catch (Exception e) {
-                    sendErrorResponse(exchange, 400, "Invalid simulation control: " + e.getMessage());
-                    return;
-                }
-            } else {
-                sendErrorResponse(exchange, 405, "Method not allowed");
-                return;
-            }
-        }
-        
-        if (!"GET".equals(method)) {
-            sendErrorResponse(exchange, 405, "Method not allowed");
-            return;
-        }
-        
         try {
-            String response;
+            // Handle endpoints based on path
             switch (path) {
-                case "/api/status":
-                    response = getSystemStatus();
+                case "/environment":
+                    if ("GET".equals(method)) {
+                        String response = getEnvironmentSnapshot();
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
                     break;
-                case "/api/vehicles":
-                    response = getVehiclesStatus();
+                
+                case "/vehicles":
+                    if ("GET".equals(method)) {
+                        String response = getVehiclesStatus();
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
                     break;
-                case "/api/orders":
-                    response = getOrdersStatus();
+                
+                case "/orders":
+                    if ("GET".equals(method)) {
+                        String response = getOrdersStatus();
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
                     break;
-                case "/api/blockages":
-                    response = getBlockagesStatus();
+                
+                case "/blockages":
+                    if ("GET".equals(method)) {
+                        String response = getBlockagesStatus();
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
                     break;
-                case "/api/stats":
-                    response = getSimulationStats();
+                
+                case "/simulation/status":
+                    if ("GET".equals(method)) {
+                        String response = getSimulationStatus();
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
                     break;
-                case "/api/environment":
-                    response = getEnvironmentSnapshot();
+                
+                case "/simulation/start":
+                    if ("POST".equals(method)) {
+                        serviceLauncher.resumeSimulation();
+                        String response = "{\"status\":\"success\",\"message\":\"Simulation started\"}";
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
                     break;
+                
+                case "/simulation/pause":
+                    if ("POST".equals(method)) {
+                        serviceLauncher.pauseSimulation();
+                        String response = "{\"status\":\"success\",\"message\":\"Simulation paused\"}";
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
+                    break;
+                    
                 default:
                     sendErrorResponse(exchange, 404, "Endpoint not found");
-                    return;
+                    break;
             }
-            
-            sendResponse(exchange, 200, response);
-            
         } catch (Exception e) {
             e.printStackTrace();
             sendErrorResponse(exchange, 500, "Internal server error: " + e.getMessage());
@@ -226,7 +219,23 @@ public class StatusController implements HttpHandler {
                 json.append("        \"totalGlpDelivery\": ").append(String.format("%.2f", plan.getTotalGlpDeliveredM3())).append(",\n");
                 json.append("        \"totalFuelConsumption\": ").append(String.format("%.2f", plan.getTotalFuelConsumedGal())).append(",\n");
                 json.append("        \"servedOrders\": ").append(plan.getServedOrders().size()).append(",\n");
-                json.append("        \"currentStatus\": \"").append(plan.getStatusAt(currentTime).name()).append("\"\n");
+                json.append("        \"currentStatus\": \"").append(plan.getStatusAt(currentTime).name()).append("\",\n");
+                
+                // Add path information
+                json.append("        \"path\": [\n");
+                List<Position> pathPoints = plan.getPathPoints();
+                for (int j = 0; j < pathPoints.size(); j++) {
+                    Position point = pathPoints.get(j);
+                    json.append("          {\n");
+                    json.append("            \"x\": ").append(point.getX()).append(",\n");
+                    json.append("            \"y\": ").append(point.getY()).append("\n");
+                    json.append("          }");
+                    if (j < pathPoints.size() - 1) {
+                        json.append(",");
+                    }
+                    json.append("\n");
+                }
+                json.append("        ]\n");
                 json.append("      }\n");
             } else {
                 json.append("\n");
@@ -401,33 +410,44 @@ public class StatusController implements HttpHandler {
         List<Blockage> blockages = environment.getActiveBlockages();
         Depot mainDepot = environment.getMainDepot();
         List<Depot> auxDepots = environment.getAuxDepots();
+        Map<Vehicle, VehiclePlan> vehiclePlans = orchestrator.getVehiclePlans();
         
         StringBuilder json = new StringBuilder();
         json.append("{\n");
         json.append("  \"timestamp\": \"").append(LocalDateTime.now().format(formatter)).append("\",\n");
         json.append("  \"simulationTime\": \"").append(currentTime.format(formatter)).append("\",\n");
+        json.append("  \"simulationRunning\": ").append(serviceLauncher.isSimulationRunning()).append(",\n");
         
-        // Add vehicles
+        // Add vehicles with positions and routes
         json.append("  \"vehicles\": [\n");
         for (int i = 0; i < vehicles.size(); i++) {
             Vehicle vehicle = vehicles.get(i);
+            VehiclePlan plan = vehiclePlans.get(vehicle);
+            
             json.append("    {\n");
             json.append("      \"id\": \"").append(vehicle.getId()).append("\",\n");
             json.append("      \"type\": \"").append(vehicle.getType().name()).append("\",\n");
             json.append("      \"status\": \"").append(vehicle.getStatus().name()).append("\",\n");
-            json.append("      \"position\": {\n");
-            json.append("        \"x\": ").append(vehicle.getCurrentPosition().getX()).append(",\n");
-            json.append("        \"y\": ").append(vehicle.getCurrentPosition().getY()).append("\n");
-            json.append("      },\n");
-            json.append("      \"fuel\": {\n");
-            json.append("        \"current\": ").append(String.format("%.2f", vehicle.getCurrentFuelGal())).append(",\n");
-            json.append("        \"capacity\": ").append(String.format("%.2f", vehicle.getFuelCapacityGal())).append("\n");
-            json.append("      },\n");
-            json.append("      \"glp\": {\n");
-            json.append("        \"current\": ").append(vehicle.getCurrentGlpM3()).append(",\n");
-            json.append("        \"capacity\": ").append(vehicle.getGlpCapacityM3()).append("\n");
-            json.append("      }\n");
-            json.append("    }");
+            json.append("      \"position\": {\"x\": ").append(vehicle.getCurrentPosition().getX())
+                .append(", \"y\": ").append(vehicle.getCurrentPosition().getY()).append("},\n");
+            json.append("      \"fuel\": ").append(String.format("%.2f", vehicle.getCurrentFuelGal())).append(",\n");
+            json.append("      \"glp\": ").append(vehicle.getCurrentGlpM3());
+            
+            // Add path information if available
+            if (plan != null) {
+                json.append(",\n      \"path\": [");
+                List<Position> path = plan.getPathPoints();
+                for (int j = 0; j < path.size(); j++) {
+                    Position pos = path.get(j);
+                    json.append("{\"x\":").append(pos.getX()).append(",\"y\":").append(pos.getY()).append("}");
+                    if (j < path.size() - 1) {
+                        json.append(",");
+                    }
+                }
+                json.append("]");
+            }
+            
+            json.append("\n    }");
             if (i < vehicles.size() - 1) {
                 json.append(",");
             }
@@ -441,17 +461,12 @@ public class StatusController implements HttpHandler {
             Order order = orders.get(i);
             json.append("    {\n");
             json.append("      \"id\": \"").append(order.getId()).append("\",\n");
-            json.append("      \"arriveTime\": \"").append(order.getArriveTime().format(formatter)).append("\",\n");
-            json.append("      \"dueTime\": \"").append(order.getDueTime().format(formatter)).append("\",\n");
-            json.append("      \"position\": {\n");
-            json.append("        \"x\": ").append(order.getPosition().getX()).append(",\n");
-            json.append("        \"y\": ").append(order.getPosition().getY()).append("\n");
-            json.append("      },\n");
+            json.append("      \"position\": {\"x\": ").append(order.getPosition().getX())
+                .append(", \"y\": ").append(order.getPosition().getY()).append("},\n");
             json.append("      \"glpRequest\": ").append(order.getGlpRequestM3()).append(",\n");
             json.append("      \"delivered\": ").append(order.isDelivered()).append(",\n");
-            json.append("      \"overdue\": ").append(order.isOverdue(currentTime)).append(",\n");
-            json.append("      \"priority\": ").append(String.format("%.2f", order.calculatePriority(currentTime))).append("\n");
-            json.append("    }");
+            json.append("      \"overdue\": ").append(order.isOverdue(currentTime));
+            json.append("\n    }");
             if (i < orders.size() - 1) {
                 json.append(",");
             }
@@ -464,25 +479,19 @@ public class StatusController implements HttpHandler {
         for (int i = 0; i < blockages.size(); i++) {
             Blockage blockage = blockages.get(i);
             json.append("    {\n");
-            json.append("      \"startTime\": \"").append(blockage.getStartTime().format(formatter)).append("\",\n");
-            json.append("      \"endTime\": \"").append(blockage.getEndTime().format(formatter)).append("\",\n");
-            json.append("      \"isActive\": ").append(blockage.isActiveAt(currentTime)).append(",\n");
-            json.append("      \"points\": [\n");
+            json.append("      \"active\": ").append(blockage.isActiveAt(currentTime)).append(",\n");
+            json.append("      \"points\": [");
             
             List<Position> points = blockage.getLines();
             for (int j = 0; j < points.size(); j++) {
                 Position point = points.get(j);
-                json.append("        {\n");
-                json.append("          \"x\": ").append(point.getX()).append(",\n");
-                json.append("          \"y\": ").append(point.getY()).append("\n");
-                json.append("        }");
+                json.append("{\"x\":").append(point.getX()).append(",\"y\":").append(point.getY()).append("}");
                 if (j < points.size() - 1) {
                     json.append(",");
                 }
-                json.append("\n");
             }
             
-            json.append("      ]\n");
+            json.append("]\n");
             json.append("    }");
             if (i < blockages.size() - 1) {
                 json.append(",");
@@ -492,39 +501,25 @@ public class StatusController implements HttpHandler {
         json.append("  ],\n");
         
         // Add depots
-        json.append("  \"depots\": {\n");
-        
+        json.append("  \"depots\": [\n");
         // Main depot
-        json.append("    \"main\": {\n");
+        json.append("    {\n");
         json.append("      \"id\": \"").append(mainDepot.getId()).append("\",\n");
-        json.append("      \"position\": {\n");
-        json.append("        \"x\": ").append(mainDepot.getPosition().getX()).append(",\n");
-        json.append("        \"y\": ").append(mainDepot.getPosition().getY()).append("\n");
-        json.append("      },\n");
-        json.append("      \"glpCapacity\": ").append(mainDepot.getGlpCapacityM3()).append(",\n");
-        json.append("      \"isMainPlant\": true\n");
-        json.append("    },\n");
+        json.append("      \"position\": {\"x\": ").append(mainDepot.getPosition().getX())
+            .append(", \"y\": ").append(mainDepot.getPosition().getY()).append("},\n");
+        json.append("      \"isMain\": true\n");
+        json.append("    }");
         
         // Auxiliary depots
-        json.append("    \"auxiliary\": [\n");
-        for (int i = 0; i < auxDepots.size(); i++) {
-            Depot depot = auxDepots.get(i);
-            json.append("      {\n");
-            json.append("        \"id\": \"").append(depot.getId()).append("\",\n");
-            json.append("        \"position\": {\n");
-            json.append("          \"x\": ").append(depot.getPosition().getX()).append(",\n");
-            json.append("          \"y\": ").append(depot.getPosition().getY()).append("\n");
-            json.append("        },\n");
-            json.append("        \"glpCapacity\": ").append(depot.getGlpCapacityM3()).append(",\n");
-            json.append("        \"isMainPlant\": false\n");
-            json.append("      }");
-            if (i < auxDepots.size() - 1) {
-                json.append(",");
-            }
-            json.append("\n");
+        for (Depot depot : auxDepots) {
+            json.append(",\n    {\n");
+            json.append("      \"id\": \"").append(depot.getId()).append("\",\n");
+            json.append("      \"position\": {\"x\": ").append(depot.getPosition().getX())
+                .append(", \"y\": ").append(depot.getPosition().getY()).append("},\n");
+            json.append("      \"isMain\": false\n");
+            json.append("    }");
         }
-        json.append("    ]\n");
-        json.append("  }\n");
+        json.append("\n  ]\n");
         
         json.append("}");
         return json.toString();
@@ -607,47 +602,29 @@ public class StatusController implements HttpHandler {
     }
     
     /**
-     * Handles simulation control requests (start, pause, speed)
-     */
-    private void handleSimulationControl(String requestBody) throws Exception {
-        // Parse the JSON request body for simulation control commands
-        if (requestBody == null || requestBody.isEmpty()) {
-            throw new IllegalArgumentException("Empty request body");
-        }
-        
-        // Check for command
-        if (requestBody.contains("\"command\"")) {
-            String command = extractStringValue(requestBody, "command");
-            
-            if (command != null) {
-                switch (command.toLowerCase()) {
-                    case "start":
-                    case "resume":
-                        serviceLauncher.resumeSimulation();
-                        break;
-                    case "pause":
-                    case "stop":
-                        serviceLauncher.pauseSimulation();
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Unknown command: " + command);
-                }
-            }
-        }
-        
-        // Check for speed adjustment
-        if (requestBody.contains("\"speed\"")) {
-            Integer speed = extractIntValue(requestBody, "speed");
-            if (speed != null) {
-                serviceLauncher.setSimulationSpeed(speed);
-            }
-        }
-    }
-    
-    /**
-     * Returns the current simulation status
+     * Returns the current simulation status with statistics
      */
     private String getSimulationStatus() {
+        LocalDateTime currentTime = environment.getCurrentTime();
+        List<Vehicle> vehicles = environment.getVehicles();
+        List<Order> orders = environment.getOrderQueue();
+        
+        long deliveredOrders = orders.stream()
+            .filter(Order::isDelivered)
+            .count();
+        
+        long overdueOrders = orders.stream()
+            .filter(o -> !o.isDelivered() && o.isOverdue(currentTime))
+            .count();
+        
+        double totalGlpCapacity = vehicles.stream()
+            .mapToDouble(Vehicle::getGlpCapacityM3)
+            .sum();
+        
+        double currentGlpLoad = vehicles.stream()
+            .mapToDouble(Vehicle::getCurrentGlpM3)
+            .sum();
+        
         return String.format("""
             {
                 "timestamp": "%s",
@@ -655,56 +632,37 @@ public class StatusController implements HttpHandler {
                 "status": {
                     "running": %b,
                     "speed": %d
+                },
+                "orders": {
+                    "total": %d,
+                    "delivered": %d,
+                    "pending": %d,
+                    "overdue": %d,
+                    "deliveryRate": %.2f
+                },
+                "fleet": {
+                    "totalVehicles": %d,
+                    "availableVehicles": %d,
+                    "totalGlpCapacity": %.2f,
+                    "currentGlpLoad": %.2f,
+                    "capacityUtilization": %.2f
                 }
             }
             """,
             LocalDateTime.now().format(formatter),
-            environment.getCurrentTime().format(formatter),
+            currentTime.format(formatter),
             serviceLauncher.isSimulationRunning(),
-            serviceLauncher.getSimulationSpeed()
+            serviceLauncher.getSimulationSpeed(),
+            orders.size(),
+            deliveredOrders,
+            orders.size() - deliveredOrders,
+            overdueOrders,
+            orders.size() > 0 ? (deliveredOrders * 100.0 / orders.size()) : 0.0,
+            vehicles.size(),
+            environment.getAvailableVehicles().size(),
+            totalGlpCapacity,
+            currentGlpLoad,
+            totalGlpCapacity > 0 ? (currentGlpLoad * 100.0 / totalGlpCapacity) : 0.0
         );
-    }
-    
-    /**
-     * Extracts a string value from a simple JSON string
-     */
-    private String extractStringValue(String json, String key) {
-        String keyQuoted = "\"" + key + "\"";
-        if (json.contains(keyQuoted)) {
-            int startIndex = json.indexOf(keyQuoted);
-            int colonIndex = json.indexOf(":", startIndex);
-            int valueStartIndex = json.indexOf("\"", colonIndex) + 1;
-            int valueEndIndex = json.indexOf("\"", valueStartIndex);
-            
-            if (valueStartIndex > 0 && valueEndIndex > 0) {
-                return json.substring(valueStartIndex, valueEndIndex);
-            }
-        }
-        return null;
-    }
-    
-    /**
-     * Extracts an integer value from a simple JSON string
-     */
-    private Integer extractIntValue(String json, String key) {
-        String keyQuoted = "\"" + key + "\"";
-        if (json.contains(keyQuoted)) {
-            int startIndex = json.indexOf(keyQuoted);
-            int colonIndex = json.indexOf(":", startIndex);
-            int commaIndex = json.indexOf(",", colonIndex);
-            if (commaIndex == -1) {
-                commaIndex = json.indexOf("}", colonIndex);
-            }
-            
-            if (startIndex > 0 && colonIndex > 0 && commaIndex > 0) {
-                String valueStr = json.substring(colonIndex + 1, commaIndex).trim();
-                try {
-                    return Integer.parseInt(valueStr);
-                } catch (NumberFormatException e) {
-                    return null;
-                }
-            }
-        }
-        return null;
     }
 }

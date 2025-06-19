@@ -203,6 +203,26 @@ public class VehiclePlan {
         return servedOrders.size();
     }
 
+    /**
+     * Gets all path points from all driving actions in this plan
+     * @return A list of all positions in the path
+     */
+    public List<Position> getPathPoints() {
+        List<Position> allPoints = new ArrayList<>();
+        
+        // Add the starting position of the vehicle
+        allPoints.add(vehicle.getCurrentPosition());
+        
+        // Add points from all driving actions
+        for (Action action : actions) {
+            if (action.getType() == ActionType.DRIVE && action.getPath() != null) {
+                allPoints.addAll(action.getPath());
+            }
+        }
+        
+        return allPoints;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();

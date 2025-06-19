@@ -49,15 +49,14 @@ public class ApiServer {
         // Main status controller for all API endpoints
         StatusController statusController = new StatusController(environment, orchestrator, serviceLauncher);
         
-        // API endpoints
-        server.createContext("/api/status", statusController);
-        server.createContext("/api/vehicles", statusController);
-        server.createContext("/api/orders", statusController);
-        server.createContext("/api/blockages", statusController);
-        server.createContext("/api/stats", statusController);
-        server.createContext("/api/environment", statusController);
-        server.createContext("/api/config", statusController);
-        server.createContext("/api/simulation", statusController);
+        // API endpoints - simplified structure
+        server.createContext("/environment", statusController);
+        server.createContext("/vehicles", statusController);
+        server.createContext("/orders", statusController);
+        server.createContext("/blockages", statusController);
+        server.createContext("/simulation/start", statusController);
+        server.createContext("/simulation/pause", statusController);
+        server.createContext("/simulation/status", statusController);
         
         // Root endpoint with API documentation
         server.createContext("/", new RootHandler());
@@ -66,15 +65,14 @@ public class ApiServer {
         server.createContext("/health", new HealthHandler());
         
         logger.info("API endpoints configured:");
-        logger.info("  GET /api/status    - System overview");
-        logger.info("  GET /api/vehicles  - Vehicle status and plans");
-        logger.info("  GET /api/orders    - Orders status and delivery info");
-        logger.info("  GET /api/blockages - Active blockages and restrictions");
-        logger.info("  GET /api/stats     - Simulation statistics");
-        logger.info("  GET /api/environment - Complete environment snapshot");
-        logger.info("  GET /api/config    - Configure simulation parameters");
-        logger.info("  GET /api/simulation - Control simulation (start/pause/adjust speed)");
-        logger.info("  GET /health        - Health check");
+        logger.info("  GET /environment     - Complete environment snapshot");
+        logger.info("  GET /vehicles        - Vehicle status and plans");
+        logger.info("  GET /orders          - Orders status and delivery info");
+        logger.info("  GET /blockages       - Active blockages and restrictions");
+        logger.info("  GET /simulation/status - Get simulation status");
+        logger.info("  POST /simulation/start - Start/resume simulation");
+        logger.info("  POST /simulation/pause - Pause simulation");
+        logger.info("  GET /health          - Health check");
     }
     
     public void start() {
@@ -150,47 +148,7 @@ public class ApiServer {
                         <h2>🔗 Endpoints Disponibles</h2>
                         
                         <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/status</span>
-                            <div class="description">
-                                <strong>Resumen del estado del sistema</strong><br>
-                                Proporciona una vista general del estado actual: vehículos disponibles, pedidos pendientes, bloqueos activos.
-                            </div>
-                        </div>
-                        
-                        <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/vehicles</span>
-                            <div class="description">
-                                <strong>Estado detallado de todos los vehículos</strong><br>
-                                Información completa de cada vehículo: posición, combustible, carga GLP, estado, plan de ruta.
-                            </div>
-                        </div>
-                        
-                        <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/orders</span>
-                            <div class="description">
-                                <strong>Estado de todos los pedidos</strong><br>
-                                Lista de pedidos con información de entrega, fechas límite, posiciones, prioridad.
-                            </div>
-                        </div>
-                        
-                        <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/blockages</span>
-                            <div class="description">
-                                <strong>Bloqueos actuales en el sistema</strong><br>
-                                Información sobre bloqueos de rutas activos e inactivos con sus períodos de tiempo.
-                            </div>
-                        </div>
-                        
-                        <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/stats</span>
-                            <div class="description">
-                                <strong>Estadísticas de la simulación</strong><br>
-                                Métricas de rendimiento: tasas de entrega, utilización de flota, estadísticas operacionales.
-                            </div>
-                        </div>
-                        
-                        <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/environment</span>
+                            <span class="method">GET</span><span class="url">/environment</span>
                             <div class="description">
                                 <strong>Snapshot completo del entorno</strong><br>
                                 Información completa sobre el estado actual del sistema, incluyendo vehículos, pedidos, bloqueos, y más.
@@ -198,18 +156,50 @@ public class ApiServer {
                         </div>
                         
                         <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/config</span>
+                            <span class="method">GET</span><span class="url">/vehicles</span>
                             <div class="description">
-                                <strong>Configure simulation parameters</strong><br>
-                                Endpoint for configuring simulation parameters.
+                                <strong>Estado detallado de todos los vehículos</strong><br>
+                                Información completa de cada vehículo: posición, combustible, carga GLP, estado, plan de ruta.
                             </div>
                         </div>
                         
                         <div class="endpoint">
-                            <span class="method">GET</span><span class="url">/api/simulation</span>
+                            <span class="method">GET</span><span class="url">/orders</span>
                             <div class="description">
-                                <strong>Control simulation (start/pause/adjust speed)</strong><br>
-                                Endpoint for controlling the simulation.
+                                <strong>Estado de todos los pedidos</strong><br>
+                                Lista de pedidos con información de entrega, fechas límite, posiciones, prioridad.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">GET</span><span class="url">/blockages</span>
+                            <div class="description">
+                                <strong>Bloqueos actuales en el sistema</strong><br>
+                                Información sobre bloqueos de rutas activos e inactivos con sus períodos de tiempo.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">GET</span><span class="url">/simulation/status</span>
+                            <div class="description">
+                                <strong>Get simulation status</strong><br>
+                                Endpoint for getting the status of the simulation.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">POST</span><span class="url">/simulation/start</span>
+                            <div class="description">
+                                <strong>Start/resume simulation</strong><br>
+                                Endpoint for starting or resuming the simulation.
+                            </div>
+                        </div>
+                        
+                        <div class="endpoint">
+                            <span class="method">POST</span><span class="url">/simulation/pause</span>
+                            <div class="description">
+                                <strong>Pause simulation</strong><br>
+                                Endpoint for pausing the simulation.
                             </div>
                         </div>
                         
