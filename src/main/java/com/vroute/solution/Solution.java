@@ -19,7 +19,7 @@ public class Solution {
     public Solution(Map<String, Order> orders, List<Route> routes) {
         this.orders = orders;
         this.routes = routes;
-        this.cost = SolutionEvaluator.evaluateSolution(this);
+        this.cost = Evaluator.evaluateSolution(this);
     }
 
     /**
@@ -54,7 +54,7 @@ public class Solution {
      * @return The updated cost
      */
     public double recalculateCost() {
-        this.cost = SolutionEvaluator.evaluateSolution(this);
+        this.cost = Evaluator.evaluateSolution(this);
         return this.cost;
     }
     
@@ -63,8 +63,8 @@ public class Solution {
      * 
      * @return A list of cost components
      */
-    public List<SolutionEvaluator.CostComponent> getDetailedCostBreakdown() {
-        return SolutionEvaluator.getDetailedCostBreakdown(this);
+    public List<Evaluator.CostComponent> getDetailedCostBreakdown() {
+        return Evaluator.getDetailedCostBreakdown(this);
     }
     
     /**
@@ -73,7 +73,7 @@ public class Solution {
      * @return true if the solution is valid, false otherwise
      */
     public boolean isValid() {
-        return SolutionEvaluator.isSolutionValid(this);
+        return Evaluator.isSolutionValid(this);
     }
     
     /**
@@ -82,7 +82,7 @@ public class Solution {
      * @return A value between 0 and 1 representing the fulfillment rate
      */
     public double getOrderFulfillmentRate() {
-        return SolutionEvaluator.calculateOrderFulfillmentRate(this);
+        return Evaluator.calculateOrderFulfillmentRate(this);
     }
     
     /**
@@ -91,6 +91,6 @@ public class Solution {
      * @return A value between 0 and 1 representing the GLP satisfaction rate
      */
     public double getGlpSatisfactionRate() {
-        return SolutionEvaluator.calculateGlpSatisfactionRate(this);
+        return Evaluator.calculateGlpSatisfactionRate(this);
     }
 }

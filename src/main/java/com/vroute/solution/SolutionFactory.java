@@ -42,21 +42,21 @@ public class SolutionFactory {
      * @return True if the solution is valid, false otherwise
      */
     public static boolean validateSolution(Solution solution) {
-        boolean isValid = SolutionEvaluator.isSolutionValid(solution);
+        boolean isValid = Evaluator.isSolutionValid(solution);
         
         if (isValid) {
-            double cost = SolutionEvaluator.evaluateSolution(solution);
-            double fulfillmentRate = SolutionEvaluator.calculateOrderFulfillmentRate(solution);
-            double glpSatisfactionRate = SolutionEvaluator.calculateGlpSatisfactionRate(solution);
+            double cost = Evaluator.evaluateSolution(solution);
+            double fulfillmentRate = Evaluator.calculateOrderFulfillmentRate(solution);
+            double glpSatisfactionRate = Evaluator.calculateGlpSatisfactionRate(solution);
             
             System.out.println("Solution is valid!");
             System.out.println("Cost: " + cost);
             System.out.println("Order fulfillment rate: " + (fulfillmentRate * 100) + "%");
             System.out.println("GLP satisfaction rate: " + (glpSatisfactionRate * 100) + "%");
             
-            List<SolutionEvaluator.CostComponent> breakdown = SolutionEvaluator.getDetailedCostBreakdown(solution);
+            List<Evaluator.CostComponent> breakdown = Evaluator.getDetailedCostBreakdown(solution);
             System.out.println("Cost breakdown:");
-            for (SolutionEvaluator.CostComponent component : breakdown) {
+            for (Evaluator.CostComponent component : breakdown) {
                 System.out.println("  " + component);
             }
         } else {

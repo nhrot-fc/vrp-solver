@@ -13,7 +13,7 @@ import com.vroute.models.Vehicle;
 /**
  * Class responsible for evaluating and scoring solutions and routes
  */
-public class SolutionEvaluator {
+public class Evaluator {
     
     // Constants for penalty calculation
     private static final double LATE_DELIVERY_PENALTY_PER_HOUR = 500.0;
