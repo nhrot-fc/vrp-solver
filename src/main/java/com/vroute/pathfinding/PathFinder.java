@@ -9,15 +9,24 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 public class PathFinder {
-    public static List<Position> findPath(Environment entorno, Position inicio, Position fin, LocalDateTime horaSalida) {
+    /**
+     * Finds a path between two positions, taking into account blockages at the given time.
+     * 
+     * @param entorno The environment containing blockage information
+     * @param inicio Starting position
+     * @param fin Destination position
+     * @param horaSalida Departure time
+     * @return A PathResult containing the path, arrival time, and total distance
+     */
+    public static PathResult findPath(Environment entorno, Position inicio, Position fin, LocalDateTime horaSalida) {
         if (inicio == null || fin == null || horaSalida == null || entorno == null) {
-            return Collections.emptyList();
+            return new PathResult(Collections.emptyList(), horaSalida, 0);
         }
         if (inicio.equals(fin)) {
-            return Collections.singletonList(inicio);
+            return new PathResult(Collections.singletonList(inicio), horaSalida, 0);
         }
         if (esBloqueado(inicio, horaSalida, entorno)) {
-            return Collections.emptyList();
+            return new PathResult(Collections.emptyList(), horaSalida, 0);
         }
 
         PriorityQueue<Node> openSet = new PriorityQueue<>();
@@ -34,7 +43,9 @@ public class PathFinder {
             Node current = openSet.poll();
 
             if (current.posicion.equals(fin)) {
-                return construirResultado(current);
+                List<Position> path = construirResultado(current);
+                double totalDistance = calcularDistanciaTotal(path);
+                return new PathResult(path, current.estimatedArrivalTime, totalDistance);
             }
 
             closedSet.add(current.posicion);
@@ -54,7 +65,7 @@ public class PathFinder {
                     continue;
                 }
 
-                LocalDateTime tiempoLlegada = calcularTiempoLlegada(current.horaDeLlegada, 1);
+                LocalDateTime tiempoLlegada = calcularTiempoLlegada(current.estimatedArrivalTime, 1);
 
                 if (esBloqueado(vecino, tiempoLlegada, entorno)) {
                     continue;
@@ -77,7 +88,7 @@ public class PathFinder {
             }
         }
 
-        return Collections.emptyList();
+        return new PathResult(Collections.emptyList(), horaSalida, 0);
     }
 
     private static boolean esBloqueado(Position posicion, LocalDateTime momento, Environment entorno) {
@@ -100,38 +111,26 @@ public class PathFinder {
     }
 
     private static List<Position> construirResultado(Node destinoNode) {
-
         List<Position> camino = new LinkedList<>();
-
         Node current = destinoNode;
-
         while (current != null) {
             camino.add(0, current.posicion);
             current = current.parent;
         }
-
         return camino;
     }
-
-    // Clase interna para los nodos de A*, ahora con tiempo
-    private static class Node implements Comparable<Node> {
-        final Position posicion;
-        final Node parent;
-        final double g;
-        final double f;
-        final LocalDateTime horaDeLlegada;
-
-        Node(Position posicion, Node parent, double g, double h, LocalDateTime horaDeLlegada) {
-            this.posicion = posicion;
-            this.parent = parent;
-            this.g = g;
-            this.f = g + h;
-            this.horaDeLlegada = horaDeLlegada;
+    
+    /**
+     * Calculates the total distance of a path.
+     * 
+     * @param path List of positions representing the path
+     * @return The total distance in kilometers
+     */
+    private static double calcularDistanciaTotal(List<Position> path) {
+        double distancia = 0.0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            distancia += path.get(i).distanceTo(path.get(i + 1));
         }
-
-        @Override
-        public int compareTo(Node other) {
-            return Double.compare(this.f, other.f);
-        }
+        return distancia;
     }
 }

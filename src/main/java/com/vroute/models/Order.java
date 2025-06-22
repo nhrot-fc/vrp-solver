@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public class Order implements Stop {
+public class Order {
     // unmutable attributes
     private final String id;
     private final LocalDateTime arriveTime;
@@ -52,7 +52,6 @@ public class Order implements Stop {
         return records;
     }
 
-    @Override
     public Position getPosition() {
         return position;
     }

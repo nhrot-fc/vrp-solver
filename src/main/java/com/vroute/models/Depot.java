@@ -2,7 +2,7 @@ package com.vroute.models;
 
 import java.time.LocalDateTime;
 
-public class Depot implements Stop {
+public class Depot {
     // unmutable attributes
     private final Position position;
     private final String id;
@@ -53,7 +53,6 @@ public class Depot implements Stop {
         this.currentGlpM3 -= amountM3;
     }
 
-    @Override
     public Position getPosition() {
         return position;
     }
