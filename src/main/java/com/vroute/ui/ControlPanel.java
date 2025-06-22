@@ -21,6 +21,13 @@ public class ControlPanel extends JPanel {
     private JSlider zoomSlider;
     private JSlider speedSlider;
     
+    // Nuevos controles para simulación automática
+    private JButton startButton;
+    private JButton pauseButton;
+    private JButton resetButton;
+    private Timer simulationTimer;
+    private boolean simulationRunning = false;
+    
     private ActionListener advanceTimeListener;
     private EnvironmentRenderer renderer;
     
@@ -39,6 +46,13 @@ public class ControlPanel extends JPanel {
         // South panel with status
         JPanel statusPanel = createStatusPanel();
         add(statusPanel, BorderLayout.SOUTH);
+        
+        // Create simulation timer (initially with 1000ms delay)
+        simulationTimer = new Timer(1000, e -> {
+            if (environment != null && simulationRunning) {
+                advanceSimulation();
+            }
+        });
     }
     
     public void setRenderer(EnvironmentRenderer renderer) {
@@ -95,7 +109,7 @@ public class ControlPanel extends JPanel {
         
         speedSlider.addChangeListener(e -> {
             if (!speedSlider.getValueIsAdjusting()) {
-                updateTimeStep();
+                updateTimerSpeed();
             }
         });
         
@@ -127,24 +141,42 @@ public class ControlPanel extends JPanel {
         zoomPanel.add(zoomSlider, BorderLayout.CENTER);
         panel.add(zoomPanel);
         
-        // Buttons panel
-        JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Simulation control buttons
+        JPanel simulationControlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        simulationControlPanel.setBorder(BorderFactory.createTitledBorder("Simulation Control"));
+        
+        startButton = new JButton("Start");
+        startButton.setEnabled(false);
+        startButton.addActionListener(e -> startSimulation());
+        simulationControlPanel.add(startButton);
+        
+        pauseButton = new JButton("Pause");
+        pauseButton.setEnabled(false);
+        pauseButton.addActionListener(e -> pauseSimulation());
+        simulationControlPanel.add(pauseButton);
+        
+        resetButton = new JButton("Reset");
+        resetButton.setEnabled(false);
+        resetButton.addActionListener(e -> resetSimulation());
+        simulationControlPanel.add(resetButton);
+        
+        panel.add(simulationControlPanel);
+        
+        // Manual control buttons
+        JPanel manualControlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        manualControlPanel.setBorder(BorderFactory.createTitledBorder("Manual Control"));
         
         advanceTimeButton = new JButton("Advance Time");
         advanceTimeButton.setEnabled(false);
-        advanceTimeButton.addActionListener(e -> {
-            if (advanceTimeListener != null) {
-                advanceTimeListener.actionPerformed(e);
-            }
-        });
-        buttonsPanel.add(advanceTimeButton);
+        advanceTimeButton.addActionListener(e -> advanceSimulation());
+        manualControlPanel.add(advanceTimeButton);
         
         refreshButton = new JButton("Refresh View");
         refreshButton.setEnabled(false);
         refreshButton.addActionListener(e -> updateDisplay());
-        buttonsPanel.add(refreshButton);
+        manualControlPanel.add(refreshButton);
         
-        panel.add(buttonsPanel);
+        panel.add(manualControlPanel);
         
         return panel;
     }
@@ -162,21 +194,25 @@ public class ControlPanel extends JPanel {
         }
     }
     
-    private void updateTimeStep() {
+    private void updateTimerSpeed() {
         int value = speedSlider.getValue();
-        // Map slider value (1-100) to time steps:
-        // - 1 = 1 minute
-        // - 50 = 15 minutes
-        // - 100 = 60 minutes
-        int timeStep;
+        // Map slider value (1-100) to timer delay in ms:
+        // 1=2000ms (slow), 50=1000ms (normal), 100=100ms (fast)
+        int delay;
         if (value <= 50) {
-            // 1 to 15 minutes (linear mapping from 1-50)
-            timeStep = 1 + (int)((value - 1) * (14.0 / 49.0));
+            // 2000ms to 1000ms (linear mapping from 1-50)
+            delay = 2000 - (int)((value - 1) * (1000.0 / 49.0));
         } else {
-            // 15 to 60 minutes (linear mapping from 51-100)
-            timeStep = 15 + (int)((value - 50) * (45.0 / 50.0));
+            // 1000ms to 100ms (linear mapping from 51-100)
+            delay = 1000 - (int)((value - 50) * (900.0 / 50.0));
         }
-        timeStepSpinner.setValue(timeStep);
+        
+        if (simulationTimer != null) {
+            simulationTimer.setDelay(delay);
+            if (simulationRunning) {
+                simulationTimer.restart();
+            }
+        }
     }
     
     public void setEnvironment(Environment environment) {
@@ -184,6 +220,8 @@ public class ControlPanel extends JPanel {
         updateDisplay();
         advanceTimeButton.setEnabled(true);
         refreshButton.setEnabled(true);
+        startButton.setEnabled(true);
+        resetButton.setEnabled(true);
     }
     
     public void setAdvanceTimeListener(ActionListener listener) {
@@ -192,6 +230,60 @@ public class ControlPanel extends JPanel {
     
     public int getTimeStep() {
         return (Integer) timeStepSpinner.getValue();
+    }
+    
+    /**
+     * Avanza un paso en la simulación
+     */
+    private void advanceSimulation() {
+        if (environment != null && advanceTimeListener != null) {
+            advanceTimeListener.actionPerformed(null);
+        }
+    }
+    
+    /**
+     * Inicia la simulación automática
+     */
+    private void startSimulation() {
+        if (environment != null) {
+            simulationRunning = true;
+            updateTimerSpeed(); // Set correct speed
+            simulationTimer.start();
+            startButton.setEnabled(false);
+            pauseButton.setEnabled(true);
+            advanceTimeButton.setEnabled(false);
+        }
+    }
+    
+    /**
+     * Pausa la simulación automática
+     */
+    private void pauseSimulation() {
+        simulationRunning = false;
+        simulationTimer.stop();
+        startButton.setEnabled(true);
+        pauseButton.setEnabled(false);
+        advanceTimeButton.setEnabled(true);
+    }
+    
+    /**
+     * Reinicia la simulación al estado inicial
+     */
+    private void resetSimulation() {
+        // Pause simulation if running
+        if (simulationRunning) {
+            pauseSimulation();
+        }
+        
+        // Reset logic - depends on how you want to define "reset"
+        // For now, we'll just notify that reset was requested via a message
+        JOptionPane.showMessageDialog(
+            this, 
+            "Reset functionality needs to be implemented based on application requirements.\n" +
+            "This could reload initial state, reset time, or restart simulation.",
+            "Reset Requested",
+            JOptionPane.INFORMATION_MESSAGE
+        );
     }
     
     public void updateDisplay() {
@@ -206,6 +298,10 @@ public class ControlPanel extends JPanel {
         
         // Update status with summary information
         StringBuilder statusText = new StringBuilder("Status: ");
+        if (simulationRunning) {
+            statusText.append("[RUNNING] ");
+        }
+        
         statusText.append(environment.getAvailableVehicles().size())
                  .append("/").append(environment.getVehicles().size())
                  .append(" vehicles available | ");
