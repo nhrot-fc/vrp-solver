@@ -20,6 +20,92 @@ public class Evaluator {
     private static final double UNDELIVERED_ORDER_PENALTY = 10000.0;
     private static final double DISTANCE_COST_PER_KM = 10.0;
     
+    // Debug mode flag
+    private static boolean debugMode = false;
+    
+    // Validation mode flags
+    private static boolean allowPartialGlpDelivery = true;
+    private static boolean enforceGlpCapacityLimit = true;
+    private static boolean validateGlpNotExceedsCapacity = true;
+    
+    /**
+     * Enables or disables debug mode
+     * @param enable true to enable debug mode, false to disable
+     */
+    public static void setDebugMode(boolean enable) {
+        debugMode = enable;
+        debug("Debug mode " + (enable ? "enabled" : "disabled"));
+    }
+    
+    /**
+     * Returns the current state of debug mode
+     * @return true if debug mode is enabled, false otherwise
+     */
+    public static boolean isDebugMode() {
+        return debugMode;
+    }
+    
+    /**
+     * Controls whether partial GLP delivery is allowed
+     * @param allow true to allow partial deliveries, false to require full deliveries
+     */
+    public static void setAllowPartialGlpDelivery(boolean allow) {
+        allowPartialGlpDelivery = allow;
+        debug("Partial GLP delivery " + (allow ? "allowed" : "disallowed"));
+    }
+    
+    /**
+     * Returns whether partial GLP delivery is allowed
+     * @return true if partial delivery is allowed, false otherwise
+     */
+    public static boolean isAllowPartialGlpDelivery() {
+        return allowPartialGlpDelivery;
+    }
+    
+    /**
+     * Controls whether GLP capacity limits are enforced at depot stops
+     * @param enforce true to enforce capacity limits, false to allow exceeding
+     */
+    public static void setEnforceGlpCapacityLimit(boolean enforce) {
+        enforceGlpCapacityLimit = enforce;
+        debug("GLP capacity limits " + (enforce ? "enforced" : "not enforced"));
+    }
+    
+    /**
+     * Returns whether GLP capacity limits are enforced at depot stops
+     * @return true if capacity limits are enforced, false otherwise
+     */
+    public static boolean isEnforceGlpCapacityLimit() {
+        return enforceGlpCapacityLimit;
+    }
+    
+    /**
+     * Controls validation that current GLP doesn't exceed vehicle capacity
+     * @param validate true to validate, false to skip validation
+     */
+    public static void setValidateGlpNotExceedsCapacity(boolean validate) {
+        validateGlpNotExceedsCapacity = validate;
+        debug("Validation of GLP not exceeding capacity " + (validate ? "enabled" : "disabled"));
+    }
+    
+    /**
+     * Returns whether validation that current GLP doesn't exceed vehicle capacity is enabled
+     * @return true if validation is enabled, false otherwise
+     */
+    public static boolean isValidateGlpNotExceedsCapacity() {
+        return validateGlpNotExceedsCapacity;
+    }
+    
+    /**
+     * Print debug message if debug mode is enabled
+     * @param message The message to print
+     */
+    private static void debug(String message) {
+        if (debugMode) {
+            System.out.println("[EVALUATOR-DEBUG] " + message);
+        }
+    }
+    
     /**
      * Evaluates a solution and returns its total cost.
      * The cost includes:
@@ -31,34 +117,56 @@ public class Evaluator {
      * @return The total cost of the solution
      */
     public static double evaluateSolution(Solution solution) {
-        if (solution == null) return Double.POSITIVE_INFINITY;
+        if (solution == null) {
+            debug("Solution is null, returning POSITIVE_INFINITY");
+            return Double.POSITIVE_INFINITY;
+        }
         
         Map<String, Order> orders = solution.getOrders();
         List<Route> routes = solution.getRoutes();
         
+        debug("Evaluating solution with " + orders.size() + " orders and " + routes.size() + " routes");
+        
         // If there are no orders, the cost is 0
-        if (orders.isEmpty()) return 0.0;
+        if (orders.isEmpty()) {
+            debug("No orders in solution, cost is 0");
+            return 0.0;
+        }
         
         // If there are orders but no routes, the cost is infinity
-        if (routes.isEmpty()) return Double.POSITIVE_INFINITY;
+        if (routes.isEmpty()) {
+            debug("Solution has orders but no routes, returning POSITIVE_INFINITY");
+            return Double.POSITIVE_INFINITY;
+        }
         
         double totalCost = 0.0;
         
         // Calculate cost for each route
-        for (Route route : routes) {
+        for (int i = 0; i < routes.size(); i++) {
+            Route route = routes.get(i);
+            debug("Evaluating route " + i + " assigned to vehicle " + route.getVehicle().getId());
             double routeCost = evaluateRoute(route, orders);
+            
             if (routeCost == Double.POSITIVE_INFINITY) {
+                debug("Route " + i + " is invalid, entire solution is invalid");
                 return Double.POSITIVE_INFINITY; // If any route is invalid, the entire solution is invalid
             }
+            
+            debug("Route " + i + " cost: " + routeCost);
             totalCost += routeCost;
         }
         
         // Add penalties for undelivered orders
+        int undeliveredCount = 0;
         for (Order order : orders.values()) {
             if (!order.isDelivered()) {
+                undeliveredCount++;
                 totalCost += UNDELIVERED_ORDER_PENALTY;
             }
         }
+        
+        debug("Undelivered orders: " + undeliveredCount + " with penalty: " + (undeliveredCount * UNDELIVERED_ORDER_PENALTY));
+        debug("Total solution cost: " + totalCost);
         
         return totalCost;
     }
@@ -74,11 +182,25 @@ public class Evaluator {
      * @return The cost of the route, or POSITIVE_INFINITY if the route is invalid
      */
     public static double evaluateRoute(Route route, Map<String, Order> orders) {
-        if (route == null || route.getStops().isEmpty()) return 0.0;
+        if (route == null || route.getStops().isEmpty()) {
+            debug("Route is null or empty, cost is 0");
+            return 0.0;
+        }
         
         Vehicle vehicle = route.getVehicle();
         List<RouteStop> stops = route.getStops();
         double totalCost = 0.0;
+        
+        debug("Evaluating route for vehicle " + vehicle.getId() + " with " + stops.size() + " stops");
+        debug("Vehicle initial state: GLP=" + vehicle.getCurrentGlpM3() + "/" + vehicle.getGlpCapacityM3() + 
+              "m³, Fuel=" + vehicle.getCurrentFuelGal() + "/" + vehicle.getFuelCapacityGal() + " gal");
+        
+        // Validate that current GLP does not exceed capacity if validation is enabled
+        if (validateGlpNotExceedsCapacity && vehicle.getCurrentGlpM3() > vehicle.getGlpCapacityM3()) {
+            debug("INVALID ROUTE: Current GLP " + vehicle.getCurrentGlpM3() + " m³ exceeds capacity " +
+                  vehicle.getGlpCapacityM3() + " m³");
+            return Double.POSITIVE_INFINITY;
+        }
         
         // Clone vehicle to simulate the route
         Vehicle simulatedVehicle = vehicle.clone();
@@ -86,21 +208,33 @@ public class Evaluator {
         int currentGlp = simulatedVehicle.getCurrentGlpM3();
         double currentFuel = simulatedVehicle.getCurrentFuelGal();
         
+        debug("Starting at position: " + currentPosition);
+        
         for (int i = 0; i < stops.size(); i++) {
             RouteStop stop = stops.get(i);
             Position stopPosition = stop.getPosition();
             
+            debug("Stop " + i + " at position: " + stopPosition);
+            
             // Calculate distance from current position to stop
             double distance = currentPosition.distanceTo(stopPosition);
-            totalCost += distance * DISTANCE_COST_PER_KM;
+            double stopDistanceCost = distance * DISTANCE_COST_PER_KM;
+            totalCost += stopDistanceCost;
+            
+            debug("Distance to stop: " + distance + " km, cost: " + stopDistanceCost);
             
             // Simulate fuel consumption
             double fuelNeeded = simulatedVehicle.calculateFuelNeeded(distance);
+            debug("Fuel needed: " + fuelNeeded + " gal (current: " + currentFuel + " gal)");
+            
             if (fuelNeeded > currentFuel) {
                 // Not enough fuel to reach this stop
+                debug("INVALID ROUTE: Not enough fuel to reach stop " + i + 
+                      ". Need " + fuelNeeded + " gal but have only " + currentFuel + " gal");
                 return Double.POSITIVE_INFINITY;
             }
             currentFuel -= fuelNeeded;
+            debug("Remaining fuel after travel: " + currentFuel + " gal");
             
             // Process stop based on its type
             if (stop instanceof OrderStop) {
@@ -108,12 +242,27 @@ public class Evaluator {
                 String orderId = orderStop.getEntityID();
                 int glpDelivery = orderStop.getGlpDelivery();
                 
+                debug("Order stop for order " + orderId + ", delivering " + glpDelivery + " m³ GLP");
+                debug("Current GLP in vehicle: " + currentGlp + " m³");
+                
                 // Check if there's enough GLP to deliver
                 if (glpDelivery > currentGlp) {
-                    // Not enough GLP to fulfill order
-                    return Double.POSITIVE_INFINITY;
+                    if (!allowPartialGlpDelivery) {
+                        // If partial delivery is not allowed, this route is invalid
+                        debug("INVALID ROUTE: Not enough GLP to fulfill order " + orderId + 
+                              ". Need " + glpDelivery + " m³ but have only " + currentGlp + " m³");
+                        return Double.POSITIVE_INFINITY;
+                    }
+                    
+                    // Otherwise, deliver what we can
+                    debug("Not enough GLP to fully fulfill order " + orderId + 
+                          ". Need " + glpDelivery + " m³ but have only " + currentGlp + " m³");
+                    glpDelivery = currentGlp;
+                    debug("Will deliver partial amount: " + glpDelivery + " m³");
                 }
                 currentGlp -= glpDelivery;
+                
+                debug("GLP remaining after delivery: " + currentGlp + " m³");
                 
                 // Check if delivery is late
                 Order order = orders.get(orderId);
@@ -121,31 +270,62 @@ public class Evaluator {
                     LocalDateTime dueDate = order.getDueTime();
                     LocalDateTime actualDelivery = orderStop.getArrivalTime();
                     
+                    debug("Order due time: " + dueDate + ", actual delivery time: " + actualDelivery);
+                    
                     if (actualDelivery.isAfter(dueDate)) {
                         Duration delay = Duration.between(dueDate, actualDelivery);
                         long hoursLate = delay.toHours() + (delay.toMinutes() % 60 > 0 ? 1 : 0); // Round up to the nearest hour
-                        totalCost += hoursLate * LATE_DELIVERY_PENALTY_PER_HOUR;
+                        double latePenalty = hoursLate * LATE_DELIVERY_PENALTY_PER_HOUR;
+                        totalCost += latePenalty;
+                        
+                        debug("Late delivery: " + hoursLate + " hours, penalty: " + latePenalty);
+                    } else {
+                        debug("Delivery on time");
                     }
+                } else {
+                    debug("WARNING: Order " + orderId + " not found in orders map");
                 }
             } else if (stop instanceof DepotStop) {
                 DepotStop depotStop = (DepotStop) stop;
                 int glpRecharge = depotStop.getGlpRecharge();
                 
-                // Refuel and recharge GLP
-                currentFuel = simulatedVehicle.getFuelCapacityGal(); // Full refuel at depot
-                currentGlp += glpRecharge;
+                debug("Depot stop at " + depotStop.getEntityID() + ", recharging " + glpRecharge + " m³ GLP");
                 
-                // Check if GLP capacity is exceeded
-                if (currentGlp > simulatedVehicle.getGlpCapacityM3()) {
-                    // GLP capacity exceeded
-                    return Double.POSITIVE_INFINITY;
+                // Refuel and recharge GLP
+                double prevFuel = currentFuel;
+                currentFuel = simulatedVehicle.getFuelCapacityGal(); // Full refuel at depot
+                debug("Refueling at depot from " + prevFuel + " to " + currentFuel + " gal");
+                
+                int prevGlp = currentGlp;
+                
+                if (enforceGlpCapacityLimit) {
+                    // Respect GLP capacity limits during recharging
+                    int newGlp = currentGlp + glpRecharge;
+                    if (newGlp > simulatedVehicle.getGlpCapacityM3()) {
+                        debug("Limiting GLP recharge due to capacity constraints. Capacity: " + 
+                              simulatedVehicle.getGlpCapacityM3() + " m³");
+                        currentGlp = simulatedVehicle.getGlpCapacityM3();
+                    } else {
+                        currentGlp = newGlp;
+                    }
+                } else {
+                    // Check if GLP capacity is exceeded
+                    currentGlp += glpRecharge;
+                    if (currentGlp > simulatedVehicle.getGlpCapacityM3()) {
+                        debug("INVALID ROUTE: GLP capacity exceeded at depot stop. " + 
+                              currentGlp + " m³ exceeds capacity of " + simulatedVehicle.getGlpCapacityM3() + " m³");
+                        return Double.POSITIVE_INFINITY;
+                    }
                 }
+                
+                debug("GLP before recharge: " + prevGlp + " m³, after recharge: " + currentGlp + " m³");
             }
             
             // Update current position for next iteration
             currentPosition = stopPosition;
         }
         
+        debug("Route evaluation complete. Total cost: " + totalCost);
         return totalCost;
     }
     
@@ -262,6 +442,7 @@ public class Evaluator {
             List<RouteStop> stops = route.getStops();
             
             Position currentPosition = vehicle.getCurrentPosition();
+            int currentGlp = vehicle.getCurrentGlpM3();
             
             for (RouteStop stop : stops) {
                 Position stopPosition = stop.getPosition();
@@ -271,8 +452,15 @@ public class Evaluator {
                 if (stop instanceof OrderStop) {
                     OrderStop orderStop = (OrderStop) stop;
                     String orderId = orderStop.getEntityID();
-                    Order order = orders.get(orderId);
+                    int glpDelivery = orderStop.getGlpDelivery();
                     
+                    // Adjust for partial delivery if needed
+                    if (glpDelivery > currentGlp) {
+                        glpDelivery = currentGlp;
+                    }
+                    currentGlp -= glpDelivery;
+                    
+                    Order order = orders.get(orderId);
                     if (order != null) {
                         LocalDateTime dueDate = order.getDueTime();
                         LocalDateTime actualDelivery = orderStop.getArrivalTime();
@@ -280,8 +468,22 @@ public class Evaluator {
                         if (actualDelivery.isAfter(dueDate)) {
                             Duration delay = Duration.between(dueDate, actualDelivery);
                             long hoursLate = delay.toHours() + (delay.toMinutes() % 60 > 0 ? 1 : 0);
-                            lateDeliveryCost += hoursLate * LATE_DELIVERY_PENALTY_PER_HOUR;
+                            double thisLateCost = hoursLate * LATE_DELIVERY_PENALTY_PER_HOUR;
+                            lateDeliveryCost += thisLateCost;
+                            debug("Cost breakdown - late delivery for order " + orderId + 
+                                  ": " + hoursLate + " hours, penalty: " + thisLateCost);
                         }
+                    }
+                } else if (stop instanceof DepotStop) {
+                    DepotStop depotStop = (DepotStop) stop;
+                    int glpRecharge = depotStop.getGlpRecharge();
+                    
+                    // Respect GLP capacity limits during recharging
+                    int newGlp = currentGlp + glpRecharge;
+                    if (newGlp > vehicle.getGlpCapacityM3()) {
+                        currentGlp = vehicle.getGlpCapacityM3();
+                    } else {
+                        currentGlp = newGlp;
                     }
                 }
                 
@@ -298,10 +500,18 @@ public class Evaluator {
         }
         undeliveredCost = undeliveredCount * UNDELIVERED_ORDER_PENALTY;
         
+        debug("Cost breakdown - Distance cost: " + distanceCost);
+        debug("Cost breakdown - Late delivery penalties: " + lateDeliveryCost);
+        debug("Cost breakdown - Undelivered orders penalties: " + undeliveredCost);
+        
         // Add all cost components
         costComponents.add(new CostComponent("Distance cost", distanceCost));
-        costComponents.add(new CostComponent("Late delivery penalties", lateDeliveryCost));
-        costComponents.add(new CostComponent("Undelivered orders penalties", undeliveredCost));
+        if (lateDeliveryCost > 0) {
+            costComponents.add(new CostComponent("Late delivery penalties", lateDeliveryCost));
+        }
+        if (undeliveredCost > 0) {
+            costComponents.add(new CostComponent("Undelivered orders penalties", undeliveredCost));
+        }
         costComponents.add(new CostComponent("Total cost", distanceCost + lateDeliveryCost + undeliveredCost));
         
         return costComponents;

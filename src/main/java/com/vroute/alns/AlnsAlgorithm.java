@@ -16,12 +16,13 @@ import com.vroute.models.Environment;
 import com.vroute.models.Order;
 import com.vroute.solution.SIHSolver;
 import com.vroute.solution.Solution;
+import com.vroute.solution.Solver;
 
 /**
  * Implementation of the Adaptive Large Neighborhood Search (ALNS) algorithm.
  * This algorithm iteratively destroys and repairs a solution to find better ones.
  */
-public class AlnsAlgorithm {
+public class AlnsAlgorithm implements Solver {
     // Simulated Annealing parameters
     private static final double INITIAL_TEMPERATURE = 100.0;
     private static final double COOLING_RATE = 0.9975;
@@ -88,6 +89,7 @@ public class AlnsAlgorithm {
      * @param env The environment containing the problem data
      * @return A solution
      */
+    @Override
     public Solution solve(Environment env) {
         // Initialize the solution with the SIH algorithm
         // Convert list of orders to a map

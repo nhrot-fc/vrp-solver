@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Hashtable;
 
 import com.vroute.models.Environment;
+import com.vroute.orchest.Orchestrator;
 
 public class ControlPanel extends JPanel {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -15,6 +16,10 @@ public class ControlPanel extends JPanel {
     private Environment environment;
     private JLabel timeLabel;
     private JSlider speedSlider;
+    
+    // Algoritmos
+    private JComboBox<String> algorithmSelector;
+    private Orchestrator orchestrator;
 
     // Simulation controls
     private JButton startButton;
@@ -53,6 +58,26 @@ public class ControlPanel extends JPanel {
         JPanel leftPanel = new JPanel(new BorderLayout());
         leftPanel.add(timePanel, BorderLayout.WEST);
         controlsPanel.add(leftPanel);
+        controlsPanel.add(Box.createHorizontalGlue());
+
+        // Algorithm selector
+        JPanel algorithmPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
+        algorithmPanel.add(new JLabel("Algoritmo:"));
+        
+        algorithmSelector = new JComboBox<>(new String[] {"ALNS", "Tabú Search"});
+        algorithmSelector.addActionListener(e -> {
+            if (orchestrator != null) {
+                int selectedIndex = algorithmSelector.getSelectedIndex();
+                if (selectedIndex == 0) {
+                    orchestrator.setAlgorithm(Orchestrator.AlgorithmType.ALNS);
+                } else if (selectedIndex == 1) {
+                    orchestrator.setAlgorithm(Orchestrator.AlgorithmType.TABU_SEARCH);
+                }
+            }
+        });
+        algorithmPanel.add(algorithmSelector);
+        
+        controlsPanel.add(algorithmPanel);
         controlsPanel.add(Box.createHorizontalGlue());
 
         // Simulation control buttons in a compact panel (center)
@@ -243,6 +268,22 @@ public class ControlPanel extends JPanel {
         updateDisplay();
         startButton.setEnabled(true);
         resetButton.setEnabled(true);
+    }
+    
+    /**
+     * Establece el orquestador para poder cambiar el algoritmo
+     * @param orchestrator El orquestador de la simulación
+     */
+    public void setOrchestrator(Orchestrator orchestrator) {
+        this.orchestrator = orchestrator;
+        if (orchestrator != null) {
+            // Actualizar el selector de algoritmos según el algoritmo actual
+            if (orchestrator.getCurrentAlgorithm() == Orchestrator.AlgorithmType.ALNS) {
+                algorithmSelector.setSelectedIndex(0);
+            } else if (orchestrator.getCurrentAlgorithm() == Orchestrator.AlgorithmType.TABU_SEARCH) {
+                algorithmSelector.setSelectedIndex(1);
+            }
+        }
     }
 
     public void setAdvanceTimeListener(ActionListener listener) {

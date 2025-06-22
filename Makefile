@@ -12,6 +12,12 @@ BIN_DIR = out
 # Nombre completo de la clase principal (con paquete)
 MAIN_CLASS = com.vroute.Main
 
+# Clase de prueba para el evaluador
+TEST_CLASS = com.vroute.test.TestEvaluator
+
+# Nuevo runner de pruebas con framework
+TEST_RUNNER_CLASS = com.vroute.test.TestRunner
+
 # Opciones del compilador
 JFLAGS = -d $(BIN_DIR) -sourcepath $(SRC_ROOT)
 
@@ -35,10 +41,22 @@ run:
 	@$(JAVA) -cp $(BIN_DIR) $(MAIN_CLASS)
 	@echo "Ejecución finalizada."
 
+# Regla para ejecutar los tests con el nuevo framework
+test: compile
+	@echo "Ejecutando tests con el framework ($(TEST_RUNNER_CLASS))..."
+	@$(JAVA) -cp $(BIN_DIR) $(TEST_RUNNER_CLASS)
+	@echo "Tests finalizados."
+
+# Regla para ejecutar los tests con el nuevo framework y reporte detallado
+test-detailed: compile
+	@echo "Ejecutando tests con el framework con reporte detallado..."
+	@$(JAVA) -cp $(BIN_DIR) $(TEST_RUNNER_CLASS) --detailed
+	@echo "Tests finalizados."
+
 # Regla para limpiar los archivos generados
 clean:
 	@echo "Limpiando directorio de salida: $(BIN_DIR)..."
 	@rm -rf $(BIN_DIR)
 	@echo "Limpieza finalizada."
 
-.PHONY: all clean compile run
+.PHONY: all clean compile run test test-detailed

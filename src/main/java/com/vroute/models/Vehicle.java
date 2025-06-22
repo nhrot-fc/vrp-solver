@@ -38,6 +38,8 @@ public class Vehicle {
     // Setters
     public void setCurrentPosition(Position position) { this.currentPosition = position; }
     public void setStatus(VehicleStatus status) { this.status = status; }
+    public void setCurrentGlpM3(int glpM3) { this.currentGlpM3 = glpM3; }
+    public void setCurrentFuelGal(double fuelGal) { this.currentFuelGal = fuelGal; }
 
     // Operations
     public void consumeFuel(double distanceKm) {
@@ -79,7 +81,7 @@ public class Vehicle {
     // Clone
     public Vehicle clone() {
         Vehicle clonedVehicle = new Vehicle(this.id, this.type, this.currentPosition.clone());
-        clonedVehicle.currentGlpM3 = this.currentGlpM3;
+        clonedVehicle.currentGlpM3 = Math.min(this.currentGlpM3, clonedVehicle.glpCapacityM3);
         clonedVehicle.currentFuelGal = this.currentFuelGal;
         clonedVehicle.status = this.status;
         return clonedVehicle;

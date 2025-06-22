@@ -7,6 +7,8 @@ import com.vroute.solution.OrderStop;
 import com.vroute.solution.Route;
 import com.vroute.solution.RouteStop;
 import com.vroute.solution.Solution;
+import com.vroute.solution.Solver;
+import com.vroute.taboo.TabuSearch;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,7 +24,15 @@ public class Orchestrator {
     private PriorityQueue<Event> globalEventsQueue;
     private PriorityQueue<Event> simulationEventsQueue;
     private DataReader dataReader;
-    private AlnsAlgorithm algorithm;
+    private Solver solver;
+    
+    // Tipos de algoritmos disponibles
+    public enum AlgorithmType {
+        ALNS,
+        TABU_SEARCH
+    }
+    
+    private AlgorithmType currentAlgorithm = AlgorithmType.ALNS;
 
     private LocalDateTime lastReplanningTime;
 
@@ -56,7 +66,7 @@ public class Orchestrator {
         this.globalEventsQueue = new PriorityQueue<>();
         this.simulationEventsQueue = new PriorityQueue<>();
         this.dataReader = new DataReader();
-        this.algorithm = new AlnsAlgorithm();
+        this.solver = new AlnsAlgorithm();
         lastReplanningTime = environment.getCurrentTime();
     }
 
@@ -185,7 +195,7 @@ public class Orchestrator {
 
 
         if (needsReplanning()) {
-            Solution solution = algorithm.solve(environment);
+            Solution solution = solver.solve(environment);
             processSolution(solution);          
             lastReplanningTime = environment.getCurrentTime();
         }
@@ -428,6 +438,38 @@ public class Orchestrator {
      */
     public Environment getEnvironment() {
         return environment;
+    }
+    
+    /**
+     * Cambia el algoritmo de solución a utilizar
+     * @param type El tipo de algoritmo a utilizar
+     */
+    public void setAlgorithm(AlgorithmType type) {
+        if (type == currentAlgorithm) {
+            return; // No hay cambio
+        }
+        
+        currentAlgorithm = type;
+        
+        // Crear nueva instancia del algoritmo según el tipo
+        switch (type) {
+            case ALNS:
+                solver = new AlnsAlgorithm();
+                System.out.println("Cambiado a algoritmo ALNS");
+                break;
+            case TABU_SEARCH:
+                solver = new TabuSearch();
+                System.out.println("Cambiado a algoritmo Tabu Search");
+                break;
+        }
+    }
+    
+    /**
+     * Obtiene el tipo de algoritmo actual
+     * @return El tipo de algoritmo actual
+     */
+    public AlgorithmType getCurrentAlgorithm() {
+        return currentAlgorithm;
     }
 }
 
