@@ -7,9 +7,11 @@ public class Depot implements Stop {
     private final Position position;
     private final String id;
     protected final int glpCapacityM3;
-    protected final boolean canRefuel;  // For breakdowns
     protected final boolean isMainDepot;
-    private LocalDateTime liveUntil;  // For breakdowns
+
+    protected final boolean canRefuel;  // For breakdowns
+    private final LocalDateTime liveUntil;  // For breakdowns
+    
     // mutable attributes
     protected int currentGlpM3;
 
@@ -20,7 +22,18 @@ public class Depot implements Stop {
         this.canRefuel = canRefuel;
         this.currentGlpM3 = 0;
         this.isMainDepot = isMainDepot;
-        this.liveUntil = LocalDateTime.MAX;  // Default to no breakdown
+        this.liveUntil = null; // null means infinite lifetime
+    }
+    
+    // Constructor for breakdown depots with a specific lifetime
+    public Depot(String id, Position position, int currentGlp, LocalDateTime liveUntil) {
+        this.id = id;
+        this.position = position;
+        this.glpCapacityM3 = currentGlp;
+        this.currentGlpM3 = currentGlp;
+        this.liveUntil = liveUntil;
+        this.canRefuel = false;
+        this.isMainDepot = false;
     }
 
     // Getters
@@ -29,7 +42,6 @@ public class Depot implements Stop {
     public int getCurrentGlpM3() { return currentGlpM3; }
     public boolean isMainDepot() { return isMainDepot; }
     public LocalDateTime getLifeTime() { return liveUntil; }
-    public void setLifeTime(LocalDateTime dateTime) { this.liveUntil = dateTime; }
     public boolean canRefuel() { return canRefuel; }
 
     // Operations
