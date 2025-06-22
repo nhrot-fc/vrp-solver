@@ -42,20 +42,27 @@ public class SimulationApp extends JFrame {
     }
     
     private void setupLayout() {
-        // Create the main split pane with vertical split (map on top, controls at bottom)
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        splitPane.setResizeWeight(0.95); // 95% for the map, 5% for controls
-        
         // Set map scroll pane to a bigger size
         mapScrollPane.setPreferredSize(new Dimension(1200, 800));
         
-        // Add components to the split pane
-        splitPane.setTopComponent(mapScrollPane);
-        splitPane.setBottomComponent(controlPanel);
-        splitPane.setDividerLocation(700); // Position the divider to favor the map
+        // Use a BorderLayout instead of SplitPane for more control over sizing
+        setLayout(new BorderLayout());
         
-        // Add the split pane to the frame
-        getContentPane().add(splitPane);
+        // Add the map component to the center (will get all extra space)
+        add(mapScrollPane, BorderLayout.CENTER);
+        
+        // Create a wrapper panel with a border layout and padding
+        JPanel wrapperPanel = new JPanel(new BorderLayout());
+        wrapperPanel.setBorder(BorderFactory.createEmptyBorder(5, 25, 5, 25));
+        
+        // Add the control panel to fill the center of the wrapper
+        wrapperPanel.add(controlPanel, BorderLayout.CENTER);
+        
+        // Add the wrapper to the south of the main layout
+        add(wrapperPanel, BorderLayout.SOUTH);
+        
+        // Set minimum size for the window
+        setMinimumSize(new Dimension(800, 600));
     }
     
     private void setupListeners() {
@@ -67,14 +74,54 @@ public class SimulationApp extends JFrame {
             }
         });
         
-        // Add mouse listener to detect when user is manually scrolling/panning
-        environmentRenderer.addMouseListener(new MouseAdapter() {
+        // Mouse listeners for map drag functionality
+        MouseAdapter mapDragListener = new MouseAdapter() {
+            private Point lastPoint = null;
+            
             @Override
             public void mousePressed(MouseEvent e) {
                 // When user clicks on the map, disable auto-centering
                 environmentRenderer.disableAutoCenter();
+                lastPoint = e.getPoint();
+                // Change cursor to indicate dragging is possible
+                environmentRenderer.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
             }
-        });
+            
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                lastPoint = null;
+                // Reset cursor
+                environmentRenderer.setCursor(Cursor.getDefaultCursor());
+            }
+            
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (lastPoint != null) {
+                    // Calculate the drag distance
+                    int dx = lastPoint.x - e.getX();
+                    int dy = lastPoint.y - e.getY();
+                    
+                    // Get the viewport and scroll it
+                    JViewport viewport = mapScrollPane.getViewport();
+                    Point viewPos = viewport.getViewPosition();
+                    
+                    // Calculate new view position
+                    int newX = Math.max(0, Math.min(viewPos.x + dx, 
+                            environmentRenderer.getWidth() - viewport.getWidth()));
+                    int newY = Math.max(0, Math.min(viewPos.y + dy, 
+                            environmentRenderer.getHeight() - viewport.getHeight()));
+                    
+                    viewport.setViewPosition(new Point(newX, newY));
+                    
+                    // Update last point
+                    lastPoint = e.getPoint();
+                }
+            }
+        };
+        
+        // Register mouse listeners on the environment renderer
+        environmentRenderer.addMouseListener(mapDragListener);
+        environmentRenderer.addMouseMotionListener(mapDragListener);
         
         // Setup window closing listener
         addWindowListener(new WindowAdapter() {

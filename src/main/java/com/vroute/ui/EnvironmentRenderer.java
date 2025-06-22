@@ -22,6 +22,7 @@ public class EnvironmentRenderer extends JPanel {
     private static final int VEHICLE_SIZE = 8;
     private static final int DEPOT_SIZE = 12;
     private static final int ORDER_SIZE = 6;
+    private static final int MAP_PADDING = 20;  // Padding around the map edges
     
     private int cellSize = DEFAULT_CELL_SIZE;
     private Environment environment;
@@ -89,15 +90,12 @@ public class EnvironmentRenderer extends JPanel {
         Container parent = getParent();
         if (parent instanceof JViewport) {
             JViewport viewport = (JViewport) parent;
-            
-            // Calculate the center of the map
-            int mapWidth = getPreferredSize().width;
-            int mapHeight = getPreferredSize().height;
             int viewportWidth = viewport.getWidth();
             int viewportHeight = viewport.getHeight();
             
-            int x = Math.max(0, (mapWidth - viewportWidth) / 2);
-            int y = Math.max(0, (mapHeight - viewportHeight) / 2);
+            // Calculate x,y position to center the actual map content (not just the panel)
+            int x = Math.max(0, MAP_PADDING + (Constants.CITY_LENGTH_X * cellSize - viewportWidth) / 2);
+            int y = Math.max(0, MAP_PADDING + (Constants.CITY_WIDTH_Y * cellSize - viewportHeight) / 2);
             
             viewport.setViewPosition(new Point(x, y));
         }
@@ -149,16 +147,16 @@ public class EnvironmentRenderer extends JPanel {
         // Draw horizontal lines
         for (int y = 0; y <= Constants.CITY_WIDTH_Y; y++) {
             g2d.drawLine(
-                0, y * cellSize, 
-                Constants.CITY_LENGTH_X * cellSize, y * cellSize
+                adjustX(0), adjustY(y * cellSize), 
+                adjustX(Constants.CITY_LENGTH_X * cellSize), adjustY(y * cellSize)
             );
         }
         
         // Draw vertical lines
         for (int x = 0; x <= Constants.CITY_LENGTH_X; x++) {
             g2d.drawLine(
-                x * cellSize, 0, 
-                x * cellSize, Constants.CITY_WIDTH_Y * cellSize
+                adjustX(x * cellSize), adjustY(0), 
+                adjustX(x * cellSize), adjustY(Constants.CITY_WIDTH_Y * cellSize)
             );
         }
     }
@@ -180,8 +178,8 @@ public class EnvironmentRenderer extends JPanel {
                 // Draw the blockage line
                 g2d.setStroke(new BasicStroke(4.0f));
                 g2d.drawLine(
-                    p1.getX() * cellSize, p1.getY() * cellSize,
-                    p2.getX() * cellSize, p2.getY() * cellSize
+                    adjustX(p1.getX() * cellSize), adjustY(p1.getY() * cellSize),
+                    adjustX(p2.getX() * cellSize), adjustY(p2.getY() * cellSize)
                 );
             }
         }
@@ -203,8 +201,8 @@ public class EnvironmentRenderer extends JPanel {
     private void drawDepot(Graphics2D g2d, Depot depot, Color color) {
         Position pos = depot.getPosition();
         int depotSize = DEPOT_SIZE * cellSize / DEFAULT_CELL_SIZE;
-        int x = pos.getX() * cellSize - depotSize/2;
-        int y = pos.getY() * cellSize - depotSize/2;
+        int x = adjustX(pos.getX() * cellSize - depotSize/2);
+        int y = adjustY(pos.getY() * cellSize - depotSize/2);
         
         g2d.setColor(color);
         g2d.fillRect(x, y, depotSize, depotSize);
@@ -233,8 +231,8 @@ public class EnvironmentRenderer extends JPanel {
     private void drawOrder(Graphics2D g2d, Order order, Color color) {
         Position pos = order.getPosition();
         int orderSize = ORDER_SIZE * cellSize / DEFAULT_CELL_SIZE;
-        int x = pos.getX() * cellSize - orderSize/2;
-        int y = pos.getY() * cellSize - orderSize/2;
+        int x = adjustX(pos.getX() * cellSize - orderSize/2);
+        int y = adjustY(pos.getY() * cellSize - orderSize/2);
         
         g2d.setColor(color);
         g2d.fillOval(x, y, orderSize, orderSize);
@@ -279,8 +277,8 @@ public class EnvironmentRenderer extends JPanel {
     private void drawVehicle(Graphics2D g2d, Vehicle vehicle, Color color) {
         Position pos = vehicle.getCurrentPosition();
         int vehicleSize = VEHICLE_SIZE * cellSize / DEFAULT_CELL_SIZE;
-        int x = pos.getX() * cellSize - vehicleSize/2;
-        int y = pos.getY() * cellSize - vehicleSize/2;
+        int x = adjustX(pos.getX() * cellSize - vehicleSize/2);
+        int y = adjustY(pos.getY() * cellSize - vehicleSize/2);
         
         // Adjust appearance based on status
         Color fillColor;
@@ -313,8 +311,17 @@ public class EnvironmentRenderer extends JPanel {
     @Override
     public Dimension getPreferredSize() {
         return new Dimension(
-            Constants.CITY_LENGTH_X * cellSize + 1,
-            Constants.CITY_WIDTH_Y * cellSize + 1
+            Constants.CITY_LENGTH_X * cellSize + 1 + (MAP_PADDING * 2),
+            Constants.CITY_WIDTH_Y * cellSize + 1 + (MAP_PADDING * 2)
         );
+    }
+    
+    // Draw elements with padding offset
+    private int adjustX(int x) {
+        return x + MAP_PADDING;
+    }
+    
+    private int adjustY(int y) {
+        return y + MAP_PADDING;
     }
 }

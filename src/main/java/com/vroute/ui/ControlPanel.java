@@ -30,20 +30,30 @@ public class ControlPanel extends JPanel {
     private EnvironmentRenderer renderer;
 
     // Zoom tracking
-    private int currentZoom = 50; // Default zoom level (middle)
+    private int currentZoom = 50;
+    private final int PADDING_HEIGHT = 40;
+    private final int PADDING_WIDTH = 20;
 
     public ControlPanel() {
-        setLayout(new FlowLayout(FlowLayout.CENTER, 20, 5));
-        setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        setLayout(new BorderLayout());
+        setBorder(BorderFactory.createEmptyBorder(PADDING_HEIGHT, PADDING_WIDTH, PADDING_HEIGHT, PADDING_WIDTH));
+
+        JPanel controlsPanel = new JPanel();
+        controlsPanel.setLayout(new BoxLayout(controlsPanel, BoxLayout.X_AXIS));
 
         // Time display
+        JPanel timePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        timePanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
         timeLabel = new JLabel("Current Time: Not initialized");
-        timeLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-        add(timeLabel);
+        timePanel.add(timeLabel);
+        
+        JPanel leftPanel = new JPanel(new BorderLayout());
+        leftPanel.add(timePanel, BorderLayout.WEST);
+        controlsPanel.add(leftPanel);
+        controlsPanel.add(Box.createHorizontalGlue());
 
-        // Simulation control buttons
-        JPanel simulationControlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        simulationControlPanel.setBorder(BorderFactory.createTitledBorder("Simulation Control"));
+        // Simulation control buttons in a compact panel (center)
+        JPanel simulationControlPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
 
         startButton = new JButton("Start");
         startButton.setEnabled(false);
@@ -60,11 +70,11 @@ public class ControlPanel extends JPanel {
         resetButton.addActionListener(e -> resetSimulation());
         simulationControlPanel.add(resetButton);
 
-        add(simulationControlPanel);
+        controlsPanel.add(simulationControlPanel);
+        controlsPanel.add(Box.createHorizontalGlue());
 
-        // Zoom buttons
-        JPanel zoomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        zoomPanel.setBorder(BorderFactory.createTitledBorder("Map Zoom"));
+        // Zoom buttons in a compact panel
+        JPanel zoomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
 
         zoomInButton = new JButton("Zoom +");
         zoomInButton.addActionListener(e -> {
@@ -96,24 +106,27 @@ public class ControlPanel extends JPanel {
         });
         zoomPanel.add(resetViewButton);
 
-        add(zoomPanel);
+        controlsPanel.add(zoomPanel);
 
-        // Speed slider with 5 discrete steps
+        // Add spring to push slider to the right
+        controlsPanel.add(Box.createHorizontalGlue());
+
+        // Speed slider with 5 discrete steps in a compact panel
         JPanel speedPanel = new JPanel(new BorderLayout());
-        speedPanel.setBorder(BorderFactory.createTitledBorder("Simulation Speed"));
 
-        // Create a slider with 5 discrete steps
+        // Create a slider with 5 discrete steps and make it wider
         speedSlider = new JSlider(JSlider.HORIZONTAL, 1, 5, 1);
         speedSlider.setMajorTickSpacing(1);
         speedSlider.setPaintTicks(true);
         speedSlider.setSnapToTicks(true);
+        speedSlider.setPreferredSize(new Dimension(250, speedSlider.getPreferredSize().height));
 
         Hashtable<Integer, JLabel> speedLabels = new Hashtable<>();
-        speedLabels.put(1, new JLabel("X1"));
-        speedLabels.put(2, new JLabel("X2"));
-        speedLabels.put(3, new JLabel("X3"));
-        speedLabels.put(4, new JLabel("X4"));
-        speedLabels.put(5, new JLabel("X5"));
+        speedLabels.put(1, new JLabel("x1"));
+        speedLabels.put(2, new JLabel("x2"));
+        speedLabels.put(3, new JLabel("x3"));
+        speedLabels.put(4, new JLabel("x4"));
+        speedLabels.put(5, new JLabel("x5"));
         speedSlider.setLabelTable(speedLabels);
         speedSlider.setPaintLabels(true);
 
@@ -124,9 +137,10 @@ public class ControlPanel extends JPanel {
         });
 
         speedPanel.add(speedSlider, BorderLayout.CENTER);
-        add(speedPanel);
+        controlsPanel.add(speedPanel);
 
-        // Create simulation timer (initially with medium speed - X3)
+        add(controlsPanel, BorderLayout.CENTER);
+
         simulationTimer = new Timer(500, e -> {
             if (environment != null && simulationRunning) {
                 advanceSimulation();
@@ -146,7 +160,6 @@ public class ControlPanel extends JPanel {
 
     private void updateTimerSpeed() {
         int value = speedSlider.getValue();
-        // Map slider value (1-5) to timer delay in ms
         int delay;
         switch (value) {
             case 1:
@@ -228,14 +241,32 @@ public class ControlPanel extends JPanel {
             pauseSimulation();
         }
 
-        // Reset logic - depends on how you want to define "reset"
-        // For now, we'll just notify that reset was requested via a message
-        JOptionPane.showMessageDialog(
+        // Ask for confirmation before resetting
+        int response = JOptionPane.showConfirmDialog(
                 this,
-                "Reset functionality needs to be implemented based on application requirements.\n" +
-                        "This could reload initial state, reset time, or restart simulation.",
-                "Reset Requested",
-                JOptionPane.INFORMATION_MESSAGE);
+                "Are you sure you want to reset the simulation?\nThis will reset all vehicles, orders, and time to their initial state.",
+                "Confirm Reset",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+
+        if (response == JOptionPane.YES_OPTION) {
+            // Reset simulation by notifying the controller via listener
+            if (environment != null && advanceTimeListener != null) {
+                // Create a new listener for reset specifically
+                if (renderer != null) {
+                    renderer.resetView(); // Reset map view to default
+                }
+
+                // This would require a new event system or controller to handle resets
+                // For now, display a message that it would be implemented
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Reset functionality will be implemented in the controller.\n" +
+                                "In a full implementation, this would recreate the initial environment state.",
+                        "Reset Simulation",
+                        JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
     }
 
     public void updateDisplay() {
