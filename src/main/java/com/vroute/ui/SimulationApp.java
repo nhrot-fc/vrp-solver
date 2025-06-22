@@ -8,7 +8,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
 import com.vroute.models.Environment;
-import com.vroute.orchest.Event;
 import com.vroute.orchest.Orchestrator;
 
 public class SimulationApp extends JFrame {
@@ -163,9 +162,6 @@ public class SimulationApp extends JFrame {
         this.orchestrator = orchestrator;
         
         if (orchestrator != null) {
-            // Subscribe to orchestrator events
-            orchestrator.addEventListener(this::handleEvent);
-            
             // Configure control panel actions
             controlPanel.setStartAction(e -> startSimulation());
             controlPanel.setPauseAction(e -> stopSimulation());
@@ -210,19 +206,7 @@ public class SimulationApp extends JFrame {
                 "Reset Simulation",
                 JOptionPane.INFORMATION_MESSAGE);
     }
-    
-    /**
-     * Handle events from the orchestrator
-     * @param event The event to handle
-     */
-    private void handleEvent(Event event) {
-        // Update the UI when events occur
-        SwingUtilities.invokeLater(() -> {
-            updateUI();
-            // Could also display event notifications or highlight related entities
-        });
-    }
-    
+
     /**
      * Updates the UI components with the current state of the environment
      */

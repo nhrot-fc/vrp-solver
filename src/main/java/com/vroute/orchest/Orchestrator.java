@@ -20,6 +20,7 @@ public class Orchestrator {
     public Orchestrator(Environment initialEnvironment) {
         this.environment = initialEnvironment;
         this.globalEventsQueue = new PriorityQueue<>();
+        this.simulationEventsQueue = new PriorityQueue<>();
         this.dataReader = new DataReader();
     }
 
@@ -74,11 +75,29 @@ public class Orchestrator {
         LocalDateTime targetTime = environment.getCurrentTime().plusMinutes(minutes);
         
         // Process all events until the target time
-        while (!globalEventsQueue.isEmpty() && !globalEventsQueue.peek().getTime().isAfter(targetTime) && !simulationEventsQueue.isEmpty() && !simulationEventsQueue.peek().getTime().isAfter(targetTime)) {
-            Event event = globalEventsQueue.poll();
+        while ( (!globalEventsQueue.isEmpty() && !globalEventsQueue.peek().getTime().isAfter(targetTime) )||
+            (!simulationEventsQueue.isEmpty() && !simulationEventsQueue.peek().getTime().isAfter(targetTime)) ) {
+            Event event = null;
+            
+            // Compare events from both queues and take the earliest one
+            if (!globalEventsQueue.isEmpty() && !simulationEventsQueue.isEmpty()) {
+                Event nextSimulationEvent = simulationEventsQueue.peek();
+                Event nextGlobalEvent = globalEventsQueue.peek();
+                if (nextGlobalEvent.getTime().isAfter(nextSimulationEvent.getTime())) {
+                    event = simulationEventsQueue.poll();
+                } else {
+                    event = globalEventsQueue.poll();
+                }
+            } else if (!globalEventsQueue.isEmpty()) {
+                event = globalEventsQueue.poll();
+            } else if (!simulationEventsQueue.isEmpty()) {
+                event = simulationEventsQueue.poll();
+            }
+            
+            if (event == null) {
+                break;
+            }
             handleEvent(event);
-            Event simulationEvent = simulationEventsQueue.poll();
-            handleEvent(simulationEvent);
         }
         
         // Update environment time
