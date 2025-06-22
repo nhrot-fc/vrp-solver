@@ -5,6 +5,7 @@ import java.awt.*;
 import java.awt.event.ActionListener;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Hashtable;
 
 import com.vroute.models.Environment;
 
@@ -17,8 +18,11 @@ public class ControlPanel extends JPanel {
     private JSpinner timeStepSpinner;
     private JButton advanceTimeButton;
     private JButton refreshButton;
+    private JSlider zoomSlider;
+    private JSlider speedSlider;
     
     private ActionListener advanceTimeListener;
+    private EnvironmentRenderer renderer;
     
     public ControlPanel() {
         setLayout(new BorderLayout());
@@ -35,6 +39,14 @@ public class ControlPanel extends JPanel {
         // South panel with status
         JPanel statusPanel = createStatusPanel();
         add(statusPanel, BorderLayout.SOUTH);
+    }
+    
+    public void setRenderer(EnvironmentRenderer renderer) {
+        this.renderer = renderer;
+        if (zoomSlider != null) {
+            zoomSlider.setValue(50); // Default zoom level
+            updateZoom();
+        }
     }
     
     private JPanel createNorthPanel() {
@@ -65,6 +77,56 @@ public class ControlPanel extends JPanel {
         timeStepPanel.add(timeStepSpinner);
         panel.add(timeStepPanel);
         
+        // Speed slider
+        JPanel speedPanel = new JPanel(new BorderLayout());
+        speedPanel.setBorder(BorderFactory.createTitledBorder("Simulation Speed"));
+        
+        speedSlider = new JSlider(JSlider.HORIZONTAL, 1, 100, 50);
+        speedSlider.setMajorTickSpacing(25);
+        speedSlider.setMinorTickSpacing(5);
+        speedSlider.setPaintTicks(true);
+        
+        Hashtable<Integer, JLabel> speedLabels = new Hashtable<>();
+        speedLabels.put(1, new JLabel("Slow"));
+        speedLabels.put(50, new JLabel("Normal"));
+        speedLabels.put(100, new JLabel("Fast"));
+        speedSlider.setLabelTable(speedLabels);
+        speedSlider.setPaintLabels(true);
+        
+        speedSlider.addChangeListener(e -> {
+            if (!speedSlider.getValueIsAdjusting()) {
+                updateTimeStep();
+            }
+        });
+        
+        speedPanel.add(speedSlider, BorderLayout.CENTER);
+        panel.add(speedPanel);
+        
+        // Zoom slider
+        JPanel zoomPanel = new JPanel(new BorderLayout());
+        zoomPanel.setBorder(BorderFactory.createTitledBorder("Map Zoom"));
+        
+        zoomSlider = new JSlider(JSlider.HORIZONTAL, 1, 100, 50);
+        zoomSlider.setMajorTickSpacing(25);
+        zoomSlider.setMinorTickSpacing(5);
+        zoomSlider.setPaintTicks(true);
+        
+        Hashtable<Integer, JLabel> zoomLabels = new Hashtable<>();
+        zoomLabels.put(1, new JLabel("1x"));
+        zoomLabels.put(50, new JLabel("2x"));
+        zoomLabels.put(100, new JLabel("3x"));
+        zoomSlider.setLabelTable(zoomLabels);
+        zoomSlider.setPaintLabels(true);
+        
+        zoomSlider.addChangeListener(e -> {
+            if (!zoomSlider.getValueIsAdjusting()) {
+                updateZoom();
+            }
+        });
+        
+        zoomPanel.add(zoomSlider, BorderLayout.CENTER);
+        panel.add(zoomPanel);
+        
         // Buttons panel
         JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         
@@ -92,6 +154,29 @@ public class ControlPanel extends JPanel {
         statusLabel = new JLabel("Status: Not initialized");
         panel.add(statusLabel, BorderLayout.CENTER);
         return panel;
+    }
+    
+    private void updateZoom() {
+        if (renderer != null) {
+            renderer.setZoom(zoomSlider.getValue());
+        }
+    }
+    
+    private void updateTimeStep() {
+        int value = speedSlider.getValue();
+        // Map slider value (1-100) to time steps:
+        // - 1 = 1 minute
+        // - 50 = 15 minutes
+        // - 100 = 60 minutes
+        int timeStep;
+        if (value <= 50) {
+            // 1 to 15 minutes (linear mapping from 1-50)
+            timeStep = 1 + (int)((value - 1) * (14.0 / 49.0));
+        } else {
+            // 15 to 60 minutes (linear mapping from 51-100)
+            timeStep = 15 + (int)((value - 50) * (45.0 / 50.0));
+        }
+        timeStepSpinner.setValue(timeStep);
     }
     
     public void setEnvironment(Environment environment) {

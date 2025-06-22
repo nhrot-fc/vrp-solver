@@ -28,6 +28,7 @@ public class SimulationApp extends JFrame {
     private void initComponents() {
         environmentRenderer = new EnvironmentRenderer();
         controlPanel = new ControlPanel();
+        controlPanel.setRenderer(environmentRenderer);
     }
     
     private void setupLayout() {
@@ -37,13 +38,14 @@ public class SimulationApp extends JFrame {
         
         // Create a scroll pane for the environment renderer to allow scrolling for large maps
         JScrollPane mapScrollPane = new JScrollPane(environmentRenderer);
-        mapScrollPane.setPreferredSize(new Dimension(800, 600));
+        mapScrollPane.setPreferredSize(new Dimension(1000, 700)); // Bigger map
         mapScrollPane.getVerticalScrollBar().setUnitIncrement(16); // Faster scrolling
         mapScrollPane.getHorizontalScrollBar().setUnitIncrement(16);
         
         // Add components to the split pane
         splitPane.setLeftComponent(mapScrollPane);
         splitPane.setRightComponent(controlPanel);
+        splitPane.setDividerLocation(800);
         
         // Add the split pane to the frame
         getContentPane().add(splitPane);
@@ -55,8 +57,7 @@ public class SimulationApp extends JFrame {
             if (environment != null) {
                 int timeStep = controlPanel.getTimeStep();
                 environment.advanceTime(timeStep);
-                environmentRenderer.repaint();
-                controlPanel.updateDisplay();
+                updateUI();
             }
         });
         
