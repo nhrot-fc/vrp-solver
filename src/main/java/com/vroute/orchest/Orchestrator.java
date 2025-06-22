@@ -42,7 +42,7 @@ public class Orchestrator {
     private static final int REPLAN_ON_NEW_ORDERS_THRESHOLD = 10;
 
     // Criterio 3: Ventana de tiempo para considerar un pedido "urgente" (en minutos)
-    private static final long URGENCY_WINDOW_MINUTES = 90;
+    private static final long URGENCY_WINDOW_MINUTES = 120;
 
     public Orchestrator(Environment initialEnvironment) {
         this.environment = initialEnvironment;
@@ -268,6 +268,7 @@ public class Orchestrator {
                 for(Order or : environment.getOrderQueue()) {
                     if (or.getId().equals(orderStop.getEntityID())) {
                         or.recordDelivery(orderStop.getGlpDelivery(), event.getEntityId(), orderStop.getArrivalTime());
+                        environment.removeDeliveredOrders();
                         break;
                     }
                 }
@@ -336,7 +337,6 @@ public class Orchestrator {
         // Ha pasado más del tiempo máximo permitido sin replanificar.
         long minutesSinceLastReplan = lastReplanningTime.getMinute() - currentTime.getMinute();
         if (minutesSinceLastReplan >= MAX_TIME_WITHOUT_REPLAN_MINUTES) {
-            System.out.println("Reason for replan: Time trigger (" + minutesSinceLastReplan + " min passed).");
             return true;
         }
 
@@ -353,7 +353,6 @@ public class Orchestrator {
                 .count();
 
         if (newOrdersCount >= REPLAN_ON_NEW_ORDERS_THRESHOLD) {
-            System.out.println("Reason for replan: New orders threshold reached (" + newOrdersCount + " new orders).");
             return true;
         }
 
