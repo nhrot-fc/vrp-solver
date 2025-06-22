@@ -1,7 +1,12 @@
 package com.vroute.orchest;
 
+import com.vroute.alns.AlnsAlgorithm;
 import com.vroute.models.*;
+import com.vroute.solution.DepotStop;
 import com.vroute.solution.OrderStop;
+import com.vroute.solution.Route;
+import com.vroute.solution.RouteStop;
+import com.vroute.solution.Solution;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,10 +22,27 @@ public class Orchestrator {
     private PriorityQueue<Event> globalEventsQueue;
     private PriorityQueue<Event> simulationEventsQueue;
     private DataReader dataReader;
+    private AlnsAlgorithm algorithm;
+
+    private LocalDateTime lastReplanningTime;
+
+    // For reset
     private Environment initialEnvironment;
     private String ordersFilePath;
     private String blockagesFilePath;
     private String maintenanceFilePath;
+
+    // Constants
+    private static final int SERVICE_TIME = 15; // Default service time in minutes
+    private static final int DEPRATURE_TIME = 15; // Default departure time in minutes
+    
+    private static final long MAX_TIME_WITHOUT_REPLAN_MINUTES = 40;
+
+    // Criterio 2: Umbral de nuevos pedidos para disparar una replanificación
+    private static final int REPLAN_ON_NEW_ORDERS_THRESHOLD = 10;
+
+    // Criterio 3: Ventana de tiempo para considerar un pedido "urgente" (en minutos)
+    private static final long URGENCY_WINDOW_MINUTES = 90;
 
     public Orchestrator(Environment initialEnvironment) {
         this.environment = initialEnvironment;
@@ -34,6 +56,8 @@ public class Orchestrator {
         this.globalEventsQueue = new PriorityQueue<>();
         this.simulationEventsQueue = new PriorityQueue<>();
         this.dataReader = new DataReader();
+        this.algorithm = new AlnsAlgorithm();
+        lastReplanningTime = environment.getCurrentTime();
     }
 
     /**
@@ -158,6 +182,13 @@ public class Orchestrator {
             }
             handleEvent(event);
         }
+
+
+        if (needsReplanning()) {
+            Solution solution = algorithm.solve(environment);
+            processSolution(solution);          
+            lastReplanningTime = environment.getCurrentTime();
+        }
         
         // Update environment time
         environment.advanceTime(minutes);
@@ -236,26 +267,160 @@ public class Orchestrator {
                 OrderStop orderStop = event.getData();
                 for(Order or : environment.getOrderQueue()) {
                     if (or.getId().equals(orderStop.getEntityID())) {
-                        or.recordDelivery(orderStop.getGlpDelivery(), orderStop.getEntityID(), orderStop.getArrivalTime());
+                        or.recordDelivery(orderStop.getGlpDelivery(), event.getEntityId(), orderStop.getArrivalTime());
+                        break;
+                    }
+                }
+                for(Vehicle vehicle : environment.getVehicles()) {
+                    if (vehicle.getId().equals(event.getEntityId())) {
+                        vehicle.dispenseGlp(orderStop.getGlpDelivery());
+                        vehicle.setStatus(VehicleStatus.SERVING);
                         break;
                     }
                 }
                 break;
 
             case GLP_DEPOT_UPDATED:
-                
-                break;
-
-            case VEHICLE_ARRIVAL:
-                // Implementation for vehicle arrival
+                DepotStop depotStop = event.getData();
+                for(Depot depot : environment.getAuxDepots()) {
+                    if (depot.getId().equals(depotStop.getEntityID())) {
+                        depot.serveGLP(depotStop.getGlpRecharge());
+                        break;
+                    }
+                }
+                for(Vehicle vehicle : environment.getVehicles()) {
+                    if (vehicle.getId().equals(event.getEntityId())) {
+                        vehicle.dispenseGlp(depotStop.getGlpRecharge());
+                        break;
+                    }
+                }
                 break;
 
             case VEHICLE_DEPARTURE:
-                // Implementation for vehicle departure
+                String departingVehicleId = event.getEntityId();
+                for(Vehicle vehicle : environment.getVehicles()) {
+                    if (vehicle.getId().equals(departingVehicleId)) {
+                        vehicle.setStatus(VehicleStatus.DRIVING);
+                        break;
+                    }
+                }
+                break;
+            
+            case VEHICLE_ARRIVES_MAIN_DEPOT:
+                String arrivingVehicleId = event.getEntityId();
+                for(Vehicle vehicle : environment.getVehicles()) {
+                    if (vehicle.getId().equals(arrivingVehicleId)) {
+                        vehicle.setStatus(VehicleStatus.IDLE);
+                        break;
+                    }
+                }
                 break;
 
             default:
                 throw new IllegalArgumentException("Unknown event type: " + event.getType());
+        }
+    }
+
+    /**
+     * Determina si se necesita una replanificación basada en un conjunto de criterios:
+     * 1. Si ha pasado demasiado tiempo desde la última replanificación.
+     * 2. Si se ha acumulado un número significativo de nuevos pedidos.
+     * 3. Si hay pedidos pendientes que se han vuelto urgentes.
+     *
+     * @return true si se debe ejecutar una replanificación, false en caso contrario.
+     */
+    private boolean needsReplanning() {         // Cambiar jeje
+        LocalDateTime currentTime = environment.getCurrentTime();
+
+        // Criterio 1: Disparador basado en el tiempo.
+        // Ha pasado más del tiempo máximo permitido sin replanificar.
+        long minutesSinceLastReplan = lastReplanningTime.getMinute() - currentTime.getMinute();
+        if (minutesSinceLastReplan >= MAX_TIME_WITHOUT_REPLAN_MINUTES) {
+            System.out.println("Reason for replan: Time trigger (" + minutesSinceLastReplan + " min passed).");
+            return true;
+        }
+
+        // Obtener la lista de pedidos pendientes (no entregados) para los siguientes criterios.
+        List<Order> pendingOrders = environment.getPendingOrders();
+        if (pendingOrders.isEmpty()) {
+            return false; // No hay nada que planificar.
+        }
+
+        // Criterio 2: Disparador basado en la densidad/cantidad de nuevos pedidos.
+        // Contamos cuántos pedidos han llegado DESPUÉS de la última replanificación.
+        long newOrdersCount = pendingOrders.stream()
+                .filter(order -> order.getArriveTime().isAfter(lastReplanningTime))
+                .count();
+
+        if (newOrdersCount >= REPLAN_ON_NEW_ORDERS_THRESHOLD) {
+            System.out.println("Reason for replan: New orders threshold reached (" + newOrdersCount + " new orders).");
+            return true;
+        }
+
+        // Criterio 3: Disparador basado en la urgencia de los pedidos.
+        // Verificamos si hay algún pedido pendiente cuya ventana de entrega esté por vencer pronto.
+        LocalDateTime urgencyThreshold = currentTime.plusMinutes(URGENCY_WINDOW_MINUTES);
+        boolean hasUrgentOrder = pendingOrders.stream()
+                .anyMatch(order -> order.getDueTime().isBefore(urgencyThreshold));
+
+        if (hasUrgentOrder) {
+            System.out.println("Reason for replan: An urgent order is approaching its deadline.");
+            return true;
+        }
+
+        // Si no se cumple ningún criterio, no es necesario replanificar.
+        return false;
+    }
+
+    /**
+     * Process a solution to generate simulation events
+     * @param solution The solution to process
+     */
+    private void processSolution(Solution solution) {
+        // Clear existing simulation events
+        simulationEventsQueue.clear();
+        
+        // Process each route in the solution
+        for (Route route : solution.getRoutes()) {
+            String vehicleId = route.getVehicle().getId();
+            
+            // Skip routes for vehicles in maintenance or unavailable
+            boolean vehicleAvailable = environment.getVehicles().stream()
+                .filter(v -> v.getId().equals(vehicleId))
+                .anyMatch(v -> v.getStatus() != VehicleStatus.MAINTENANCE && v.getStatus() != VehicleStatus.UNAVAILABLE);
+            
+            if (!vehicleAvailable) {
+                continue;
+            }
+            
+            for (RouteStop stop : route.getStops()) {
+                // Process main depots stops
+                if (stop instanceof DepotStop) {
+                    DepotStop depotStop = (DepotStop) stop;
+                    if(depotStop.getEntityID().equals(environment.getMainDepot().getId())) {
+                        // Create arrival to main depot and departure events
+                        LocalDateTime arrivalTime = depotStop.getArrivalTime();
+                        simulationEventsQueue.add(new Event(EventType.VEHICLE_ARRIVES_MAIN_DEPOT, arrivalTime, vehicleId, depotStop));
+                        
+                        // Schedule departure after service time
+                        LocalDateTime departureTime = arrivalTime.plusMinutes(DEPRATURE_TIME);
+                        simulationEventsQueue.add(new Event(EventType.VEHICLE_DEPARTURE, departureTime, vehicleId, vehicleId));
+                    } else {
+                        // It is a stop for an auxiliary depot
+                        // Create GLP depot update event
+                        simulationEventsQueue.add(new Event(EventType.GLP_DEPOT_UPDATED, depotStop.getArrivalTime(), vehicleId, depotStop));
+                    }
+
+                } else if (stop instanceof OrderStop) {
+                    OrderStop orderStop = (OrderStop) stop;
+                    // Create order delivery event
+                    simulationEventsQueue.add(new Event(EventType.ORDER_DELIVERED, orderStop.getArrivalTime(), vehicleId, orderStop));
+                    
+                    // Schedule vehicle departure after service time
+                    LocalDateTime departureTime = orderStop.getArrivalTime().plusMinutes(SERVICE_TIME);
+                    simulationEventsQueue.add(new Event(EventType.VEHICLE_DEPARTURE, departureTime, vehicleId, vehicleId));
+                }
+            }
         }
     }
 
@@ -266,3 +431,5 @@ public class Orchestrator {
         return environment;
     }
 }
+
+

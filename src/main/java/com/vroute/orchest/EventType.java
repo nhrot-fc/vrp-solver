@@ -16,6 +16,7 @@ public enum EventType {
     ORDER_DELIVERED, // Order is delivered
     GLP_DEPOT_UPDATED, // GLP depot status updated
     VEHICLE_ARRIVAL, // Vehicle arrives at a location
-    VEHICLE_DEPARTURE // Vehicle departs from a location
+    VEHICLE_DEPARTURE, // Vehicle departs from a location
+    VEHICLE_ARRIVES_MAIN_DEPOT
     
 }
