@@ -1,11 +1,9 @@
 package com.vroute.controllers;
 
 import com.vroute.models.Environment;
-import com.vroute.orchest.Event;
 import com.vroute.orchest.Orchestrator;
 import com.vroute.ui.SimulationApp;
 
-import java.util.function.Consumer;
 import javax.swing.Timer;
 
 /**
@@ -99,14 +97,7 @@ public class SimulationController {
         }
     }
     
-    /**
-     * Agrega un listener para eventos del orquestrador
-     * 
-     * @param listener Función que procesa un evento
-     */
-    public void addEventListener(Consumer<Event> listener) {
-        orchestrator.addEventListener(listener);
-    }
+
     
     /**
      * Obtiene el entorno de simulación

@@ -1,12 +1,11 @@
 package com.vroute.orchest;
 
 import com.vroute.models.*;
+import com.vroute.solution.OrderStop;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.PriorityQueue;
-import java.util.function.Consumer;
 
 /**
  * Orchestrator manages the simulation of the environment over time,
@@ -14,19 +13,18 @@ import java.util.function.Consumer;
  */
 public class Orchestrator {
     private Environment environment;
-    private PriorityQueue<Event> eventQueue;
+    private PriorityQueue<Event> globalEventsQueue;
+    private PriorityQueue<Event> simulationEventsQueue;
     private DataReader dataReader;
-    private List<Consumer<Event>> eventListeners;
 
     public Orchestrator(Environment initialEnvironment) {
         this.environment = initialEnvironment;
-        this.eventQueue = new PriorityQueue<>();
+        this.globalEventsQueue = new PriorityQueue<>();
         this.dataReader = new DataReader();
-        this.eventListeners = new ArrayList<>();
     }
 
     /**
-     * Loads and schedules events from data files
+     * Init global events queue with initial state
      */
     public void loadEvents(String ordersFilePath, String blockagesFilePath, String maintenanceFilePath) {
         LocalDateTime startTime = environment.getCurrentTime();
@@ -35,7 +33,7 @@ public class Orchestrator {
         List<Order> orders = dataReader.loadOrders(ordersFilePath, startTime, 24, 0);
         for (Order order : orders) {
             Event event = new Event(EventType.ORDER_ARRIVAL, order.getArriveTime(), order.getId(), order);
-            eventQueue.add(event);
+            globalEventsQueue.add(event);
         }
         
         // Load blockages for next 24 hours
@@ -44,12 +42,12 @@ public class Orchestrator {
             // Schedule start of blockage
             Event startEvent = new Event(EventType.BLOCKAGE_START, blockage.getStartTime(), 
                                         "blockage", blockage);
-            eventQueue.add(startEvent);
+            globalEventsQueue.add(startEvent);
             
             // Schedule end of blockage
             Event endEvent = new Event(EventType.BLOCKAGE_END, blockage.getEndTime(), 
                                       "blockage", blockage);
-            eventQueue.add(endEvent);
+            globalEventsQueue.add(endEvent);
         }
         
         // Load maintenance tasks for next 30 days
@@ -58,12 +56,12 @@ public class Orchestrator {
             // Schedule start of maintenance
             Event startEvent = new Event(EventType.MAINTENANCE_START, task.getStartTime(), 
                                         task.getVehicleId(), task);
-            eventQueue.add(startEvent);
+            globalEventsQueue.add(startEvent);
             
             // Schedule end of maintenance
             Event endEvent = new Event(EventType.MAINTENANCE_END, task.getEndTime(), 
                                       task.getVehicleId(), task);
-            eventQueue.add(endEvent);
+            globalEventsQueue.add(endEvent);
         }
     }
     
@@ -74,15 +72,17 @@ public class Orchestrator {
         LocalDateTime targetTime = environment.getCurrentTime().plusMinutes(minutes);
         
         // Process all events until the target time
-        while (!eventQueue.isEmpty() && !eventQueue.peek().getTime().isAfter(targetTime)) {
-            Event event = eventQueue.poll();
+        while (!globalEventsQueue.isEmpty() && !globalEventsQueue.peek().getTime().isAfter(targetTime) && !simulationEventsQueue.isEmpty() && !simulationEventsQueue.peek().getTime().isAfter(targetTime)) {
+            Event event = globalEventsQueue.poll();
             handleEvent(event);
+            Event simulationEvent = simulationEventsQueue.poll();
+            handleEvent(simulationEvent);
         }
         
         // Update environment time
         environment.setCurrentTime(targetTime);
         // Manually update environment state since it's private
-        environment.advanceTime(0);
+        environment.advanceTime(minutes);
     }
     
     /**
@@ -141,34 +141,45 @@ public class Orchestrator {
                 break;
                 
             case GLP_DEPOT_REFILL:
-                // Implementation for depot refill
+                for(Depot depot : environment.getAuxDepots()) {
+                    if (depot.getId().equals(event.getEntityId())) {
+                        depot.refillGLP();
+                        break;
+                    }
+                }
                 break;
                 
             case SIMULATION_END:
                 // Implementation for simulation end
                 break;
+
+            case ORDER_DELIVERED:
+                OrderStop orderStop = event.getData();
+                for(Order or : environment.getOrderQueue()) {
+                    if (or.getId().equals(orderStop.getEntityID())) {
+                        or.recordDelivery(orderStop.getGlpDelivery(), orderStop.getEntityID(), orderStop.getArrivalTime());
+                        break;
+                    }
+                }
+                break;
+
+            case GLP_DEPOT_UPDATED:
+                
+                break;
+
+            case VEHICLE_ARRIVAL:
+                // Implementation for vehicle arrival
+                break;
+
+            case VEHICLE_DEPARTURE:
+                // Implementation for vehicle departure
+                break;
+
+            default:
+                throw new IllegalArgumentException("Unknown event type: " + event.getType());
         }
-        
-        // Notify listeners
-        notifyListeners(event);
     }
 
-    /**
-     * Adds an event listener
-     */
-    public void addEventListener(Consumer<Event> listener) {
-        eventListeners.add(listener);
-    }
-    
-    /**
-     * Notifies all listeners of an event
-     */
-    private void notifyListeners(Event event) {
-        for (Consumer<Event> listener : eventListeners) {
-            listener.accept(event);
-        }
-    }
-    
     /**
      * Gets the current environment
      */

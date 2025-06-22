@@ -35,17 +35,17 @@ public class Main {
         Depot mainDepot = new Depot(
             Constants.MAIN_PLANT_ID, 
             Constants.CENTRAL_STORAGE_LOCATION,
-            500, true
+            500, true, true
         );
         mainDepot.refillGLP();
         
         // Aux depots
         List<Depot> auxDepots = new ArrayList<>();
-        Depot northDepot = new Depot("NORTH_DEPOT", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, true);
+        Depot northDepot = new Depot("NORTH_DEPOT", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, true, false);
         northDepot.refillGLP();
         auxDepots.add(northDepot);
         
-        Depot eastDepot = new Depot("EAST_DEPOT", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, true);
+        Depot eastDepot = new Depot("EAST_DEPOT", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, true, false);
         eastDepot.refillGLP();
         auxDepots.add(eastDepot);
         

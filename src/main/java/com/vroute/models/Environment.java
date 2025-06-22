@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.vroute.solution.Solution;
+
 public class Environment {
     private final List<Vehicle> vehicles;
     private final Depot mainDepot;
@@ -16,6 +18,7 @@ public class Environment {
     private final List<Blockage> activeBlockages;
     private final List<Incident> incidentRegistry;
     private final List<MaintenanceTask> maintenanceTasks;
+    private List<Solution> currentSolution;
 
     public Environment(List<Vehicle> vehicles, Depot mainDepot, List<Depot> auxDepots,
             LocalDateTime referenceDateTime) {
@@ -27,6 +30,7 @@ public class Environment {
         this.activeBlockages = new ArrayList<>();
         this.incidentRegistry = new ArrayList<>();
         this.maintenanceTasks = new ArrayList<>();
+        this.currentSolution = new ArrayList<>();
     }
 
     public List<Vehicle> getVehicles() {
@@ -55,6 +59,14 @@ public class Environment {
 
     public List<MaintenanceTask> getMaintenanceTasks() {
         return Collections.unmodifiableList(maintenanceTasks);
+    }
+
+    public List<Solution> getCurrentSolution() {
+        return Collections.unmodifiableList(currentSolution);
+    }
+
+    public void setCurrentSolution(List<Solution> currentSolution) {
+        this.currentSolution = new ArrayList<>(currentSolution);
     }
 
     public Depot getMainDepot() {
