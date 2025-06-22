@@ -14,8 +14,8 @@ import com.vroute.alns.operators.RepairOperator;
 import com.vroute.alns.operators.WorstRemovalOperator;
 import com.vroute.models.Environment;
 import com.vroute.models.Order;
+import com.vroute.solution.SIHSolver;
 import com.vroute.solution.Solution;
-import com.vroute.solution.SolutionFactory;
 
 /**
  * Implementation of the Adaptive Large Neighborhood Search (ALNS) algorithm.
@@ -96,8 +96,7 @@ public class AlnsAlgorithm {
             orderMap.put(order.getId(), order);
         }
         
-        Solution currentSolution = SolutionFactory.createSIHSolution(
-            env, env.getAvailableVehicles(), env.getAuxDepots(), orderMap, env.getCurrentTime());
+        Solution currentSolution = new SIHSolver().solve(env);
         
         if (currentSolution == null) {
             System.out.println("Failed to create initial solution");

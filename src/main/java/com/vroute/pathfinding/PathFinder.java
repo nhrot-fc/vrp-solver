@@ -9,23 +9,14 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 public class PathFinder {
-    /**
-     * Finds a path between two positions, taking into account blockages at the given time.
-     * 
-     * @param entorno The environment containing blockage information
-     * @param inicio Starting position
-     * @param fin Destination position
-     * @param horaSalida Departure time
-     * @return A PathResult containing the path, arrival time, and total distance
-     */
-    public static PathResult findPath(Environment entorno, Position inicio, Position fin, LocalDateTime horaSalida) {
-        if (inicio == null || fin == null || horaSalida == null || entorno == null) {
+    public static PathResult findPath(Environment env, Position inicio, Position fin, LocalDateTime horaSalida) {
+        if (inicio == null || fin == null || horaSalida == null || env == null) {
             return new PathResult(Collections.emptyList(), horaSalida, 0);
         }
         if (inicio.equals(fin)) {
             return new PathResult(Collections.singletonList(inicio), horaSalida, 0);
         }
-        if (esBloqueado(inicio, horaSalida, entorno)) {
+        if (esBloqueado(inicio, horaSalida, env)) {
             return new PathResult(Collections.emptyList(), horaSalida, 0);
         }
 
@@ -67,7 +58,7 @@ public class PathFinder {
 
                 LocalDateTime tiempoLlegada = calcularTiempoLlegada(current.estimatedArrivalTime, 1);
 
-                if (esBloqueado(vecino, tiempoLlegada, entorno)) {
+                if (esBloqueado(vecino, tiempoLlegada, env)) {
                     continue;
                 }
 
@@ -119,13 +110,7 @@ public class PathFinder {
         }
         return camino;
     }
-    
-    /**
-     * Calculates the total distance of a path.
-     * 
-     * @param path List of positions representing the path
-     * @return The total distance in kilometers
-     */
+
     private static double calcularDistanciaTotal(List<Position> path) {
         double distancia = 0.0;
         for (int i = 0; i < path.size() - 1; i++) {

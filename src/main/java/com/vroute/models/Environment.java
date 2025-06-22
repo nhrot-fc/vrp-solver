@@ -41,6 +41,12 @@ public class Environment {
         return Collections.unmodifiableList(auxDepots);
     }
 
+    public List<Depot> getDepots() {
+        List<Depot> depots = new ArrayList<>(auxDepots);
+        depots.add(mainDepot);
+        return Collections.unmodifiableList(depots);
+    }
+
     public LocalDateTime getCurrentTime() {
         return currentTime;
     }

@@ -15,37 +15,31 @@ import java.util.stream.Collectors;
  * function
  * that considers distance, time constraints, and vehicle limitations.
  */
-public class SIHSolver {
+public class SIHSolver implements Solver {
 
     private static final double ALPHA = 0.6; // Weight for distance increase
     private static final double BETA = 0.3; // Weight for time delay increase
     private static final double GAMMA = 0.1; // Weight for waiting time increase
 
-    private final Environment environment;
-    private final List<Vehicle> availableVehicles;
-    private final List<Depot> depots;
-    private final LocalDateTime currentDateTime;
-
-    public SIHSolver(Environment environment, List<Vehicle> availableVehicles, List<Depot> depots,
-            LocalDateTime currentDateTime) {
-        this.environment = environment;
-        this.availableVehicles = new ArrayList<>(availableVehicles);
-        this.depots = depots;
-        this.currentDateTime = currentDateTime;
-    }
-
-    public Solution solve(Map<String, Order> orders) {
-        if (orders.isEmpty()) {
-            return new Solution(orders, Collections.emptyList());
+    @Override
+    public Solution solve(Environment environment) {
+        Map<String, Order> pendingOrders = new HashMap<>();
+        for (Order order : environment.getPendingOrders()) {
+            pendingOrders.put(order.getId(), order);
         }
 
-        Map<String, Order> remainingOrders = new HashMap<>(orders);
+        if (pendingOrders.isEmpty()) {
+            return new Solution(pendingOrders, Collections.emptyList());
+        }
+
+        Map<String, Order> remainingOrders = new HashMap<>(pendingOrders);
         List<Route> routes = new ArrayList<>();
-        List<Vehicle> vehicles = new ArrayList<>(availableVehicles);
+        List<Vehicle> vehicles = new ArrayList<>(environment.getAvailableVehicles());
         List<Order> sortedOrders = sortOrdersByCriticality(remainingOrders.values());
+
         while (!sortedOrders.isEmpty() && !vehicles.isEmpty()) {
             Vehicle vehicle = vehicles.remove(0);
-            Route route = constructRoute(vehicle, sortedOrders, remainingOrders);
+            Route route = constructRoute(environment, vehicle, sortedOrders, remainingOrders);
 
             if (route != null) {
                 routes.add(route);
@@ -55,24 +49,25 @@ public class SIHSolver {
             }
         }
 
-        return new Solution(orders, routes);
+        return new Solution(pendingOrders, routes);
     }
 
-    private Route constructRoute(Vehicle vehicle, List<Order> sortedOrders, Map<String, Order> remainingOrders) {
+    private Route constructRoute(Environment environment, Vehicle vehicle, List<Order> sortedOrders,
+            Map<String, Order> remainingOrders) {
         String routeId = "R" + UUID.randomUUID().toString().substring(0, 8);
 
         Vehicle simulatedVehicle = vehicle.clone();
         Position startPosition = simulatedVehicle.getCurrentPosition();
-        Depot startDepot = findDepotByPosition(startPosition);
+        Depot startDepot = findDepotByPosition(environment, startPosition);
 
         if (startDepot == null) {
             return null;
         }
 
         List<RouteStop> stops = new ArrayList<>();
-        LocalDateTime currentTime = currentDateTime;
+        LocalDateTime currentTime = environment.getCurrentTime();
 
-        Order seedOrder = findSeedOrder(sortedOrders, simulatedVehicle, startDepot, currentTime);
+        Order seedOrder = findSeedOrder(environment, sortedOrders, simulatedVehicle, startDepot, currentTime);
         if (seedOrder == null) {
             return null;
         }
@@ -122,6 +117,7 @@ public class SIHSolver {
 
         while (moreInsertionsPossible) {
             InsertionResult bestInsertion = findBestInsertion(
+                    environment,
                     simulatedVehicle,
                     stops,
                     remainingOrders,
@@ -155,6 +151,7 @@ public class SIHSolver {
 
         // Try to add a final stop back to the main depot
         DepotStop finalDepotStop = findFinalDepotStop(
+                environment,
                 simulatedVehicle,
                 stops.get(stops.size() - 1).getPosition(),
                 stops.get(stops.size() - 1).getArrivalTime().plusMinutes(Constants.GLP_SERVE_DURATION_MINUTES));
@@ -178,7 +175,7 @@ public class SIHSolver {
         return new Route(routeId, vehicle, stops);
     }
 
-    private Order findSeedOrder(List<Order> sortedOrders, Vehicle vehicle, Depot startDepot,
+    private Order findSeedOrder(Environment environment, List<Order> sortedOrders, Vehicle vehicle, Depot startDepot,
             LocalDateTime currentTime) {
         Depot mainDepot = environment.getMainDepot();
 
@@ -241,6 +238,7 @@ public class SIHSolver {
     }
 
     private InsertionResult findBestInsertion(
+            Environment environment,
             Vehicle vehicle,
             List<RouteStop> stops,
             Map<String, Order> remainingOrders,
@@ -263,6 +261,7 @@ public class SIHSolver {
             if (order.getRemainingGlpM3() > vehicle.getCurrentGlpM3()) {
                 // Check if we can refuel at a depot
                 boolean canRefuel = false;
+                List<Depot> depots = environment.getDepots();
                 for (Depot depot : depots) {
                     if (depot.canRefuel() && depot.getCurrentGlpM3() >= order.getRemainingGlpM3()) {
                         canRefuel = true;
@@ -279,6 +278,7 @@ public class SIHSolver {
             for (int i = 0; i <= stops.size(); i++) {
                 // Calculate cost of inserting the order at position i
                 InsertionCost cost = calculateInsertionCost(
+                        environment,
                         vehicle,
                         stops,
                         i,
@@ -298,6 +298,7 @@ public class SIHSolver {
                     if (cost.needsRefuel) {
                         // Find best depot for refueling
                         Depot bestDepot = findBestRefuelDepot(
+                                environment,
                                 currentPosition,
                                 order.getPosition());
 
@@ -341,6 +342,7 @@ public class SIHSolver {
     }
 
     private InsertionCost calculateInsertionCost(
+            Environment environment,
             Vehicle vehicle,
             List<RouteStop> stops,
             int insertPosition,
@@ -415,7 +417,7 @@ public class SIHSolver {
             needsRefuel = true;
 
             // Check if there's a depot nearby that can refuel
-            Depot refuelDepot = findBestRefuelDepot(prevPosition, order.getPosition());
+            Depot refuelDepot = findBestRefuelDepot(environment, prevPosition, order.getPosition());
             if (refuelDepot == null) {
                 return null; // No feasible refuel depot
             }
@@ -496,9 +498,11 @@ public class SIHSolver {
         return new InsertionCost(totalCost, arrivalTime, needsRefuel);
     }
 
-    private Depot findBestRefuelDepot(Position fromPosition, Position toPosition) {
+    private Depot findBestRefuelDepot(Environment environment, Position fromPosition, Position toPosition) {
         Depot bestDepot = null;
         double bestDeviation = Double.POSITIVE_INFINITY;
+
+        List<Depot> depots = environment.getDepots();
 
         for (Depot depot : depots) {
             if (!depot.canRefuel()) {
@@ -521,6 +525,7 @@ public class SIHSolver {
     }
 
     private DepotStop findFinalDepotStop(
+            Environment environment,
             Vehicle vehicle,
             Position currentPosition,
             LocalDateTime currentTime) {
@@ -566,7 +571,9 @@ public class SIHSolver {
                 .collect(Collectors.toList());
     }
 
-    private Depot findDepotByPosition(Position position) {
+    private Depot findDepotByPosition(Environment environment, Position position) {
+        List<Depot> depots = environment.getDepots();
+
         for (Depot depot : depots) {
             if (depot.getPosition().equals(position)) {
                 return depot;
