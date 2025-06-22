@@ -1,11 +1,9 @@
 package com.vroute.controllers;
 
 import com.vroute.models.Environment;
-import com.vroute.orchest.Event;
 import com.vroute.orchest.Orchestrator;
 import com.vroute.ui.SimulationApp;
 
-import java.util.function.Consumer;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 
@@ -75,9 +73,7 @@ public class SimulationController {
         }
     }
     
-    public void addEventListener(Consumer<Event> listener) {
-        orchestrator.addEventListener(listener);
-    }
+
     
     public Environment getEnvironment() {
         return environment;

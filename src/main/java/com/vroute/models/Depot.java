@@ -1,26 +1,35 @@
 package com.vroute.models;
 
+import java.time.LocalDateTime;
+
 public class Depot implements Stop {
     // unmutable attributes
     private final Position position;
     private final String id;
     protected final int glpCapacityM3;
-    protected final boolean canRefuel;
+    protected final boolean canRefuel;  // For breakdowns
+    protected final boolean isMainDepot;
+    private LocalDateTime liveUntil;  // For breakdowns
     // mutable attributes
     protected int currentGlpM3;
 
-    public Depot(String id, Position position, int glpCapacityM3, boolean canRefuel) {
+    public Depot(String id, Position position, int glpCapacityM3, boolean canRefuel, boolean isMainDepot) {
         this.id = id;
         this.position = position;
         this.glpCapacityM3 = glpCapacityM3;
         this.canRefuel = canRefuel;
         this.currentGlpM3 = 0;
+        this.isMainDepot = isMainDepot;
+        this.liveUntil = LocalDateTime.MAX;  // Default to no breakdown
     }
 
     // Getters
     public String getId() { return id; }
     public int getGlpCapacityM3() { return glpCapacityM3; }
     public int getCurrentGlpM3() { return currentGlpM3; }
+    public boolean isMainDepot() { return isMainDepot; }
+    public LocalDateTime getLifeTime() { return liveUntil; }
+    public void setLifeTime(LocalDateTime dateTime) { this.liveUntil = dateTime; }
     public boolean canRefuel() { return canRefuel; }
 
     // Operations
@@ -49,7 +58,7 @@ public class Depot implements Stop {
     }
 
     public Depot clone() {
-        Depot clonedDepot = new Depot(this.id, this.position, this.glpCapacityM3, this.canRefuel);
+        Depot clonedDepot = new Depot(this.id, this.position, this.glpCapacityM3, this.canRefuel, this.isMainDepot);
         clonedDepot.currentGlpM3 = this.currentGlpM3;
         return clonedDepot;
     }
