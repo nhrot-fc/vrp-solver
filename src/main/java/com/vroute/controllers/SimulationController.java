@@ -3,17 +3,10 @@ package com.vroute.controllers;
 import com.vroute.models.Environment;
 import com.vroute.orchest.Event;
 import com.vroute.orchest.Orchestrator;
+import com.vroute.ui.SimulationApp;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.function.Consumer;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
-import javafx.util.Duration;
+import javax.swing.Timer;
 
 /**
  * Controlador para la simulación del sistema V-Route.
@@ -22,19 +15,15 @@ import javafx.util.Duration;
 public class SimulationController {
     private final Orchestrator orchestrator;
     private final Environment environment;
-    private Timeline autoAdvanceTimeline;
+    private Timer autoAdvanceTimer;
+    private SimulationApp simulationApp;
     
-    // Propiedades observables para la interfaz
-    private final StringProperty currentTimeProperty = new SimpleStringProperty();
-    private final BooleanProperty autoRunningProperty = new SimpleBooleanProperty(false);
+    // Estado de la simulación
+    private boolean autoRunning = false;
     
     // Velocidad de simulación (minutos por tick)
     private int timeStepMinutes = 1;
     private int autoAdvanceIntervalMs = 1000; // 1 segundo por defecto
-    
-    // Formato de fecha/hora para mostrar
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = 
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     
     /**
      * Constructor del controlador de simulación
@@ -44,7 +33,16 @@ public class SimulationController {
     public SimulationController(Orchestrator orchestrator) {
         this.orchestrator = orchestrator;
         this.environment = orchestrator.getEnvironment();
-        updateTimeProperty();
+    }
+    
+    /**
+     * Inicia la interfaz gráfica
+     */
+    public void initUI() {
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            simulationApp = new SimulationApp();
+            simulationApp.setEnvironment(environment);
+        });
     }
     
     /**
@@ -54,33 +52,34 @@ public class SimulationController {
      */
     public void advanceTime(int minutes) {
         orchestrator.advanceTime(minutes);
-        updateTimeProperty();
+        if (simulationApp != null) {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                simulationApp.updateUI();
+            });
+        }
     }
     
     /**
      * Inicia el avance automático del tiempo
      */
     public void startAutoAdvance() {
-        if (autoAdvanceTimeline != null) {
-            autoAdvanceTimeline.stop();
+        if (autoAdvanceTimer != null) {
+            autoAdvanceTimer.stop();
         }
         
-        autoAdvanceTimeline = new Timeline(
-            new KeyFrame(Duration.millis(autoAdvanceIntervalMs), e -> advanceTime(timeStepMinutes))
-        );
-        autoAdvanceTimeline.setCycleCount(Timeline.INDEFINITE);
-        autoAdvanceTimeline.play();
-        autoRunningProperty.set(true);
+        autoAdvanceTimer = new Timer(autoAdvanceIntervalMs, e -> advanceTime(timeStepMinutes));
+        autoAdvanceTimer.start();
+        autoRunning = true;
     }
     
     /**
      * Detiene el avance automático del tiempo
      */
     public void stopAutoAdvance() {
-        if (autoAdvanceTimeline != null) {
-            autoAdvanceTimeline.stop();
+        if (autoAdvanceTimer != null) {
+            autoAdvanceTimer.stop();
         }
-        autoRunningProperty.set(false);
+        autoRunning = false;
     }
     
     /**
@@ -110,14 +109,6 @@ public class SimulationController {
     }
     
     /**
-     * Actualiza la propiedad del tiempo actual
-     */
-    private void updateTimeProperty() {
-        LocalDateTime currentTime = environment.getCurrentTime();
-        currentTimeProperty.set(currentTime.format(DATE_TIME_FORMATTER));
-    }
-    
-    /**
      * Obtiene el entorno de simulación
      * 
      * @return El entorno actual
@@ -136,30 +127,12 @@ public class SimulationController {
     }
     
     /**
-     * Obtiene la propiedad observable del tiempo actual
-     * 
-     * @return Propiedad de cadena con el tiempo formateado
-     */
-    public StringProperty currentTimeProperty() {
-        return currentTimeProperty;
-    }
-    
-    /**
-     * Obtiene la propiedad que indica si el avance automático está activo
-     * 
-     * @return Propiedad booleana que indica si está en auto-avance
-     */
-    public BooleanProperty autoRunningProperty() {
-        return autoRunningProperty;
-    }
-    
-    /**
      * Verifica si el avance automático está activo
      * 
      * @return true si el avance automático está activo
      */
     public boolean isAutoRunning() {
-        return autoRunningProperty.get();
+        return autoRunning;
     }
     
     /**
@@ -178,5 +151,16 @@ public class SimulationController {
      */
     public int getAutoAdvanceIntervalMs() {
         return autoAdvanceIntervalMs;
+    }
+    
+    /**
+     * Actualiza el estado de la interfaz gráfica
+     */
+    public void updateUI() {
+        if (simulationApp != null) {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                simulationApp.updateUI();
+            });
+        }
     }
 }
