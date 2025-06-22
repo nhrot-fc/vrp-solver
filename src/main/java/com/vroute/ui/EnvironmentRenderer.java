@@ -17,6 +17,8 @@ import com.vroute.models.Vehicle;
 
 public class EnvironmentRenderer extends JPanel {
     private static final int DEFAULT_CELL_SIZE = 12;
+    private static final int MIN_CELL_SIZE = 8;
+    private static final int MAX_CELL_SIZE = 50;  // Increased max zoom level
     private static final int VEHICLE_SIZE = 8;
     private static final int DEPOT_SIZE = 12;
     private static final int ORDER_SIZE = 6;
@@ -24,6 +26,8 @@ public class EnvironmentRenderer extends JPanel {
     private int cellSize = DEFAULT_CELL_SIZE;
     private Environment environment;
     private Map<String, Color> vehicleColors;
+    private boolean autoCenter = true;
+    private Point viewCenter = null;
     
     public EnvironmentRenderer() {
         setBackground(Color.WHITE);
@@ -32,14 +36,83 @@ public class EnvironmentRenderer extends JPanel {
     
     public void setEnvironment(Environment environment) {
         this.environment = environment;
+        resetView();
         repaint();
     }
     
-    public void setZoom(int zoomLevel) {
-        // Convert slider value (1-100) to cell size (8-30)
-        this.cellSize = 8 + (int)((zoomLevel / 100.0) * 22);
+    public void resetView() {
+        // Reset to default view (centered)
+        autoCenter = true;
+        viewCenter = null;
         revalidate();
         repaint();
+    }
+    
+    public int getZoom() {
+        // Convert cell size (MIN_CELL_SIZE-MAX_CELL_SIZE) back to slider value (1-100)
+        return (int)(((cellSize - MIN_CELL_SIZE) * 100.0) / (MAX_CELL_SIZE - MIN_CELL_SIZE));
+    }
+    
+    public void setZoom(int zoomLevel) {
+        // Convert slider value (1-100) to cell size (MIN_CELL_SIZE-MAX_CELL_SIZE)
+        int oldCellSize = this.cellSize;
+        this.cellSize = MIN_CELL_SIZE + (int)((zoomLevel / 100.0) * (MAX_CELL_SIZE - MIN_CELL_SIZE));
+        
+        // If we're not auto-centering, adjust the view center to maintain the same visible area
+        if (!autoCenter && viewCenter != null) {
+            Container parent = getParent();
+            if (parent instanceof JViewport) {
+                JViewport viewport = (JViewport) parent;
+                Rectangle viewRect = viewport.getViewRect();
+                
+                // Calculate the center point of the current view
+                int centerX = viewRect.x + viewRect.width / 2;
+                int centerY = viewRect.y + viewRect.height / 2;
+                
+                // Scale it to the new cell size
+                double scale = (double) cellSize / oldCellSize;
+                viewCenter.x = (int) (centerX * scale);
+                viewCenter.y = (int) (centerY * scale);
+            }
+        }
+        
+        revalidate();
+        repaint();
+        
+        // Ensure the scroll pane updates to center if needed
+        SwingUtilities.invokeLater(this::scrollToCenter);
+    }
+    
+    private void scrollToCenter() {
+        if (!autoCenter || viewCenter == null) return;
+        
+        Container parent = getParent();
+        if (parent instanceof JViewport) {
+            JViewport viewport = (JViewport) parent;
+            
+            // Calculate the center of the map
+            int mapWidth = getPreferredSize().width;
+            int mapHeight = getPreferredSize().height;
+            int viewportWidth = viewport.getWidth();
+            int viewportHeight = viewport.getHeight();
+            
+            int x = Math.max(0, (mapWidth - viewportWidth) / 2);
+            int y = Math.max(0, (mapHeight - viewportHeight) / 2);
+            
+            viewport.setViewPosition(new Point(x, y));
+        }
+    }
+    
+    public void disableAutoCenter() {
+        Container parent = getParent();
+        if (parent instanceof JViewport) {
+            JViewport viewport = (JViewport) parent;
+            Rectangle viewRect = viewport.getViewRect();
+            
+            // Store current view center
+            viewCenter = new Point(viewRect.x + viewRect.width / 2, viewRect.y + viewRect.height / 2);
+            autoCenter = false;
+        }
     }
     
     @Override

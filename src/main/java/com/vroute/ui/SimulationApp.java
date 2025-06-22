@@ -2,6 +2,8 @@ package com.vroute.ui;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
@@ -11,6 +13,7 @@ public class SimulationApp extends JFrame {
     private EnvironmentRenderer environmentRenderer;
     private ControlPanel controlPanel;
     private Environment environment;
+    private JScrollPane mapScrollPane;
     
     public SimulationApp() {
         setTitle("V-Route Simulation");
@@ -29,23 +32,27 @@ public class SimulationApp extends JFrame {
         environmentRenderer = new EnvironmentRenderer();
         controlPanel = new ControlPanel();
         controlPanel.setRenderer(environmentRenderer);
+        
+        // Create a scroll pane for the environment renderer with always visible scrollbars
+        mapScrollPane = new JScrollPane(environmentRenderer);
+        mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        mapScrollPane.getVerticalScrollBar().setUnitIncrement(16); // Faster scrolling
+        mapScrollPane.getHorizontalScrollBar().setUnitIncrement(16);
     }
     
     private void setupLayout() {
-        // Create the main split pane
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitPane.setResizeWeight(0.8); // 80% for the map, 20% for controls
+        // Create the main split pane with vertical split (map on top, controls at bottom)
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
+        splitPane.setResizeWeight(0.95); // 95% for the map, 5% for controls
         
-        // Create a scroll pane for the environment renderer to allow scrolling for large maps
-        JScrollPane mapScrollPane = new JScrollPane(environmentRenderer);
-        mapScrollPane.setPreferredSize(new Dimension(1000, 700)); // Bigger map
-        mapScrollPane.getVerticalScrollBar().setUnitIncrement(16); // Faster scrolling
-        mapScrollPane.getHorizontalScrollBar().setUnitIncrement(16);
+        // Set map scroll pane to a bigger size
+        mapScrollPane.setPreferredSize(new Dimension(1200, 800));
         
         // Add components to the split pane
-        splitPane.setLeftComponent(mapScrollPane);
-        splitPane.setRightComponent(controlPanel);
-        splitPane.setDividerLocation(800);
+        splitPane.setTopComponent(mapScrollPane);
+        splitPane.setBottomComponent(controlPanel);
+        splitPane.setDividerLocation(700); // Position the divider to favor the map
         
         // Add the split pane to the frame
         getContentPane().add(splitPane);
@@ -55,9 +62,17 @@ public class SimulationApp extends JFrame {
         // Setup listener for the advance time button
         controlPanel.setAdvanceTimeListener(e -> {
             if (environment != null) {
-                int timeStep = controlPanel.getTimeStep();
-                environment.advanceTime(timeStep);
+                environment.advanceTime(1);
                 updateUI();
+            }
+        });
+        
+        // Add mouse listener to detect when user is manually scrolling/panning
+        environmentRenderer.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                // When user clicks on the map, disable auto-centering
+                environmentRenderer.disableAutoCenter();
             }
         });
         
@@ -75,6 +90,12 @@ public class SimulationApp extends JFrame {
         this.environment = environment;
         environmentRenderer.setEnvironment(environment);
         controlPanel.setEnvironment(environment);
+        
+        // Center the view initially
+        SwingUtilities.invokeLater(() -> {
+            // Ensure scrollbars update and center on first load
+            environmentRenderer.resetView();
+        });
     }
     
     /**
