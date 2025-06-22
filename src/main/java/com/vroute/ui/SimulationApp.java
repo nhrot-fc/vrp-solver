@@ -9,6 +9,7 @@ import java.awt.event.WindowEvent;
 
 import com.vroute.models.Environment;
 import com.vroute.orchest.Orchestrator;
+import com.vroute.controllers.SimulationController;
 
 public class SimulationApp extends JFrame {
     private EnvironmentRenderer environmentRenderer;
@@ -16,6 +17,7 @@ public class SimulationApp extends JFrame {
     private Environment environment;
     private Orchestrator orchestrator;
     private JScrollPane mapScrollPane;
+    private SimulationController controller;
     
     public SimulationApp() {
         setTitle("V-Route Simulation");
@@ -149,7 +151,7 @@ public class SimulationApp extends JFrame {
         // Center the view initially
         SwingUtilities.invokeLater(() -> {
             // Ensure scrollbars update and center on first load
-            environmentRenderer.resetView();
+            environmentRenderer.resetZoom();
         });
     }
     
@@ -166,6 +168,36 @@ public class SimulationApp extends JFrame {
             controlPanel.setStartAction(e -> startSimulation());
             controlPanel.setPauseAction(e -> stopSimulation());
             controlPanel.setResetAction(e -> resetSimulation());
+            
+            // Set reset listener for the control panel
+            controlPanel.setResetListener(e -> resetSimulation());
+        }
+    }
+    
+    /**
+     * Sets the controller for this application
+     * 
+     * @param controller The simulation controller
+     */
+    public void setController(SimulationController controller) {
+        this.controller = controller;
+        
+        if (controller != null) {
+            // Get orchestrator from controller for consistency
+            this.orchestrator = controller.getOrchestrator();
+            
+            // Get environment from controller
+            this.environment = controller.getEnvironment();
+            
+            // Update renderer with latest environment reference
+            environmentRenderer.setEnvironment(this.environment);
+            
+            // Connect reset functionality to controller
+            controlPanel.setResetListener(e -> {
+                if (controller != null) {
+                    controller.resetSimulation();
+                }
+            });
         }
     }
     
@@ -199,12 +231,48 @@ public class SimulationApp extends JFrame {
         // Stop the simulation first
         stopSimulation();
         
-        // For a real reset, we would need to recreate the environment
-        JOptionPane.showMessageDialog(
+        // Reset using the controller if available
+        if (controller != null) {
+            controller.resetSimulation();
+            // Center the map view
+            environmentRenderer.resetZoom();
+        }
+        // Fall back to orchestrator if no controller but orchestrator is available
+        else if (orchestrator != null) {
+            orchestrator.resetSimulation();
+            
+            // Update the UI after reset
+            updateUI();
+            
+            // Center the map view
+            environmentRenderer.resetZoom();
+        } else {
+            JOptionPane.showMessageDialog(
                 this,
-                "Reset functionality would recreate the environment from initial data.",
-                "Reset Simulation",
-                JOptionPane.INFORMATION_MESSAGE);
+                "Cannot reset: Orchestrator not configured.",
+                "Reset Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Updates all UI components with the new environment reference
+     * 
+     * @param environment The environment to update components with
+     */
+    public void updateAllComponentsWithEnvironment(Environment environment) {
+        // Update local reference
+        this.environment = environment;
+        
+        // Update renderer
+        if (environmentRenderer != null) {
+            environmentRenderer.setEnvironment(environment);
+        }
+        
+        // Update control panel
+        if (controlPanel != null) {
+            controlPanel.setEnvironment(environment);
+        }
     }
 
     /**

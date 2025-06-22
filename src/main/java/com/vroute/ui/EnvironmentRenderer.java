@@ -37,11 +37,11 @@ public class EnvironmentRenderer extends JPanel {
     
     public void setEnvironment(Environment environment) {
         this.environment = environment;
-        resetView();
+        resetZoom();
         repaint();
     }
     
-    public void resetView() {
+    public void resetZoom() {
         // Reset to default view (centered)
         autoCenter = true;
         viewCenter = null;

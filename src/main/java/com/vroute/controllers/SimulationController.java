@@ -9,7 +9,7 @@ import javax.swing.UIManager;
 
 public class SimulationController {
     private final Orchestrator orchestrator;
-    private final Environment environment;
+    private Environment environment;
     private Timer autoAdvanceTimer;
     private SimulationApp simulationApp;
     
@@ -61,6 +61,34 @@ public class SimulationController {
             autoAdvanceTimer.stop();
         }
         autoRunning = false;
+    }
+    
+    /**
+     * Resets the simulation to its initial state
+     */
+    public void resetSimulation() {
+        // Stop auto-advance if running
+        if (isAutoRunning()) {
+            stopAutoAdvance();
+        }
+        
+        // Reset orchestrator and get the fresh environment reference
+        Environment resetEnvironment = orchestrator.resetSimulation();
+        
+        // Update the local environment reference
+        this.environment = resetEnvironment;
+        
+        // Update UI with the new environment reference
+        if (simulationApp != null) {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                // Update the environment reference in all components
+                simulationApp.setEnvironment(resetEnvironment);
+                simulationApp.updateUI();
+                
+                // Ensure control panel and renderer are updated 
+                simulationApp.updateAllComponentsWithEnvironment(resetEnvironment);
+            });
+        }
     }
     
     public void setSimulationSpeed(int minutesPerTick, int intervalMillis) {

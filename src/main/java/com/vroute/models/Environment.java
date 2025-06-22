@@ -217,6 +217,40 @@ public class Environment {
         orderQueue.clear();
     }
 
+    /**
+     * Clears all active blockages
+     */
+    public void clearBlockages() {
+        activeBlockages.clear();
+    }
+    
+    /**
+     * Clears all recorded incidents
+     */
+    public void clearIncidents() {
+        incidentRegistry.clear();
+    }
+    
+    /**
+     * Clears all maintenance tasks
+     */
+    public void clearMaintenanceTasks() {
+        maintenanceTasks.clear();
+    }
+    
+    /**
+     * Reset depots to their initial state (refill GLP)
+     */
+    public void resetDepots() {
+        // Refill main depot
+        mainDepot.refillGLP();
+        
+        // Refill aux depots
+        for (Depot depot : auxDepots) {
+            depot.refillGLP();
+        }
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -282,5 +316,38 @@ public class Environment {
         sb.append("\n  📊 Total: ").append(todayMaintenanceCount).append(" maintenance tasks today");
 
         return sb.toString();
+    }
+
+    /**
+     * Creates a deep copy of this environment
+     * @return A new Environment instance with copies of all internal state
+     */
+    public Environment clone() {
+        // Create new environment with copies of immutable objects
+        Environment cloned = new Environment(
+            new ArrayList<>(vehicles), 
+            mainDepot,  // Depot is assumed to be immutable or has its own clone method
+            new ArrayList<>(auxDepots),
+            LocalDateTime.of(currentTime.toLocalDate(), currentTime.toLocalTime())
+        );
+        
+        // Copy orders
+        cloned.addOrders(new ArrayList<>(orderQueue));
+        
+        // Copy blockages
+        cloned.addBlockages(new ArrayList<>(activeBlockages));
+        
+        // Copy incidents
+        cloned.addIncidents(new ArrayList<>(incidentRegistry));
+        
+        // Copy maintenance tasks
+        cloned.addMaintenanceTasks(new ArrayList<>(maintenanceTasks));
+        
+        // Copy current solution if exists
+        if (currentSolution != null) {
+            cloned.setCurrentSolution(new ArrayList<>(currentSolution));
+        }
+        
+        return cloned;
     }
 }

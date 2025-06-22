@@ -22,7 +22,7 @@ public class ControlPanel extends JPanel {
     private JButton resetButton;
     private JButton zoomInButton;
     private JButton zoomOutButton;
-    private JButton resetViewButton;
+    private JButton resetZoomButton;
     private Timer simulationTimer;
     private boolean simulationRunning = false;
 
@@ -33,6 +33,9 @@ public class ControlPanel extends JPanel {
     private int currentZoom = 50;
     private final int PADDING_HEIGHT = 40;
     private final int PADDING_WIDTH = 20;
+
+    // Add a field for the reset listener
+    private ActionListener resetListener;
 
     public ControlPanel() {
         setLayout(new BorderLayout());
@@ -96,15 +99,15 @@ public class ControlPanel extends JPanel {
         });
         zoomPanel.add(zoomOutButton);
 
-        resetViewButton = new JButton("Reset View");
-        resetViewButton.addActionListener(e -> {
+        resetZoomButton = new JButton("Reset Zoom");
+        resetZoomButton.addActionListener(e -> {
             currentZoom = 50; // Reset to default zoom
             if (renderer != null) {
                 renderer.setZoom(currentZoom);
-                renderer.resetView(); // Reset to centered view
+                renderer.resetZoom(); // Reset to centered view
             }
         });
-        zoomPanel.add(resetViewButton);
+        zoomPanel.add(resetZoomButton);
 
         controlsPanel.add(zoomPanel);
 
@@ -247,6 +250,14 @@ public class ControlPanel extends JPanel {
     }
     
     /**
+     * Sets the reset event listener
+     * @param listener The action listener to be called when the reset button is pressed
+     */
+    public void setResetListener(ActionListener listener) {
+        this.resetListener = listener;
+    }
+    
+    /**
      * Sets a custom action listener for the start button
      * 
      * @param listener The action listener to set
@@ -340,19 +351,22 @@ public class ControlPanel extends JPanel {
         if (response == JOptionPane.YES_OPTION) {
             // Reset simulation by notifying the controller via listener
             if (environment != null && advanceTimeListener != null) {
-                // Create a new listener for reset specifically
+                // Reset map view to default
                 if (renderer != null) {
-                    renderer.resetView(); // Reset map view to default
+                    renderer.resetZoom();
                 }
 
-                // This would require a new event system or controller to handle resets
-                // For now, display a message that it would be implemented
-                JOptionPane.showMessageDialog(
+                // Fire the reset event to the controller
+                // The controller should be configured to listen for this event
+                if (resetListener != null) {
+                    resetListener.actionPerformed(null);
+                } else {
+                    JOptionPane.showMessageDialog(
                         this,
-                        "Reset functionality will be implemented in the controller.\n" +
-                                "In a full implementation, this would recreate the initial environment state.",
+                        "Reset functionality is not connected. Please connect a reset listener to the control panel.",
                         "Reset Simulation",
                         JOptionPane.INFORMATION_MESSAGE);
+                }
             }
         }
     }

@@ -6,6 +6,7 @@ import com.vroute.solution.OrderStop;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.ArrayList;
 
 /**
  * Orchestrator manages the simulation of the environment over time,
@@ -16,18 +17,76 @@ public class Orchestrator {
     private PriorityQueue<Event> globalEventsQueue;
     private PriorityQueue<Event> simulationEventsQueue;
     private DataReader dataReader;
+    private Environment initialEnvironment;
+    private String ordersFilePath;
+    private String blockagesFilePath;
+    private String maintenanceFilePath;
 
     public Orchestrator(Environment initialEnvironment) {
         this.environment = initialEnvironment;
+        // Store initial time for reset
+        this.initialEnvironment = new Environment(
+            new ArrayList<>(), 
+            null, 
+            new ArrayList<>(), 
+            initialEnvironment.getCurrentTime()
+        );
         this.globalEventsQueue = new PriorityQueue<>();
         this.simulationEventsQueue = new PriorityQueue<>();
         this.dataReader = new DataReader();
     }
 
     /**
+     * Resets the simulation to its initial state
+     * Must be called after loadEvents to enable proper reset
+     * @return The reset environment instance
+     */
+    public Environment resetSimulation() {
+        // Clear event queues
+        globalEventsQueue.clear();
+        simulationEventsQueue.clear();
+        
+        // Reset environment to initial state by clearing all dynamic data
+        // Clear orders
+        environment.clearAllOrders();
+        
+        // Reset time to original
+        environment.setCurrentTime(initialEnvironment.getCurrentTime());
+        
+        // Reset vehicle status to AVAILABLE
+        for (Vehicle vehicle : environment.getVehicles()) {
+            vehicle.setStatus(VehicleStatus.AVAILABLE);
+        }
+        
+        // Clear active blockages, incidents and maintenance tasks
+        environment.clearBlockages();
+        environment.clearIncidents();
+        environment.clearMaintenanceTasks();
+        
+        // Reset any depot resources if needed
+        environment.resetDepots();
+        
+        // Clear current solution if any
+        environment.setCurrentSolution(new ArrayList<>());
+        
+        // If file paths are stored, reload events
+        if (ordersFilePath != null && blockagesFilePath != null && maintenanceFilePath != null) {
+            loadEvents(ordersFilePath, blockagesFilePath, maintenanceFilePath);
+        }
+        
+        System.out.println("Simulation has been reset to initial state");
+        return environment;
+    }
+
+    /**
      * Init global events queue with initial state
      */
     public void loadEvents(String ordersFilePath, String blockagesFilePath, String maintenanceFilePath) {
+        // Store file paths for potential reset
+        this.ordersFilePath = ordersFilePath;
+        this.blockagesFilePath = blockagesFilePath;
+        this.maintenanceFilePath = maintenanceFilePath;
+        
         LocalDateTime startTime = environment.getCurrentTime();
         
         // Load orders for next 24 hours
