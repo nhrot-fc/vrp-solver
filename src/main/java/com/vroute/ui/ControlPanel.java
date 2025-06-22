@@ -188,6 +188,52 @@ public class ControlPanel extends JPanel {
             }
         }
     }
+    
+    /**
+     * Gets the current simulation speed in milliseconds
+     * @return Delay in milliseconds between simulation steps
+     */
+    public int getSimulationSpeed() {
+        int value = speedSlider.getValue();
+        switch (value) {
+            case 1: return 1000;
+            case 2: return 500;
+            case 3: return 250;
+            case 4: return 125;
+            case 5: return 50;
+            default: return 1000;
+        }
+    }
+    
+    /**
+     * Sets the simulation timer from an external source
+     * @param timer The timer to use for simulation
+     */
+    public void setSimulationTimer(Timer timer) {
+        // Stop existing timer if present
+        if (simulationTimer != null && simulationTimer.isRunning()) {
+            simulationTimer.stop();
+        }
+        
+        this.simulationTimer = timer;
+        simulationRunning = timer != null && timer.isRunning();
+        
+        // Update button states
+        startButton.setEnabled(!simulationRunning);
+        pauseButton.setEnabled(simulationRunning);
+    }
+    
+    /**
+     * Stops the simulation timer
+     */
+    public void stopSimulation() {
+        simulationRunning = false;
+        if (simulationTimer != null && simulationTimer.isRunning()) {
+            simulationTimer.stop();
+        }
+        startButton.setEnabled(true);
+        pauseButton.setEnabled(false);
+    }
 
     public void setEnvironment(Environment environment) {
         this.environment = environment;
@@ -198,6 +244,48 @@ public class ControlPanel extends JPanel {
 
     public void setAdvanceTimeListener(ActionListener listener) {
         this.advanceTimeListener = listener;
+    }
+    
+    /**
+     * Sets a custom action listener for the start button
+     * 
+     * @param listener The action listener to set
+     */
+    public void setStartAction(ActionListener listener) {
+        // Clear existing listeners
+        for (ActionListener al : startButton.getActionListeners()) {
+            startButton.removeActionListener(al);
+        }
+        // Add new listener
+        startButton.addActionListener(listener);
+    }
+    
+    /**
+     * Sets a custom action listener for the pause button
+     * 
+     * @param listener The action listener to set
+     */
+    public void setPauseAction(ActionListener listener) {
+        // Clear existing listeners
+        for (ActionListener al : pauseButton.getActionListeners()) {
+            pauseButton.removeActionListener(al);
+        }
+        // Add new listener
+        pauseButton.addActionListener(listener);
+    }
+    
+    /**
+     * Sets a custom action listener for the reset button
+     * 
+     * @param listener The action listener to set
+     */
+    public void setResetAction(ActionListener listener) {
+        // Clear existing listeners
+        for (ActionListener al : resetButton.getActionListeners()) {
+            resetButton.removeActionListener(al);
+        }
+        // Add new listener
+        resetButton.addActionListener(listener);
     }
 
     /**

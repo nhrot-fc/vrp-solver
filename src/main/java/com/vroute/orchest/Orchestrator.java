@@ -65,6 +65,8 @@ public class Orchestrator {
                                       task.getVehicleId(), task);
             eventQueue.add(endEvent);
         }
+        environment.addBlockages(blockages);
+        environment.addMaintenanceTasks(tasks);
     }
     
     /**
@@ -80,15 +82,14 @@ public class Orchestrator {
         }
         
         // Update environment time
-        environment.setCurrentTime(targetTime);
-        // Manually update environment state since it's private
-        environment.advanceTime(0);
+        environment.advanceTime(minutes);
     }
     
     /**
      * Process a single event based on its type
      */
     private void handleEvent(Event event) {
+        System.out.println("Handling event: " + event);
         switch (event.getType()) {
             case ORDER_ARRIVAL:
                 Order order = event.getData();

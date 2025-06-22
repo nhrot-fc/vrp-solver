@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.time.Year;
 
 public class DataReader {
     // Formatters for parsing dates and times from different file formats
@@ -93,7 +94,18 @@ public class DataReader {
                         int hour = Integer.parseInt(dhmMatcher.group(2));
                         int minute = Integer.parseInt(dhmMatcher.group(3));
 
-                        LocalDateTime arrivalDateTime = LocalDateTime.of(startDate.getYear(), startDate.getMonth(), day, hour, minute);
+                        // Check for valid day for the given month
+                        int year = startDate.getYear();
+                        int month = startDate.getMonthValue();
+                        int maxDaysInMonth = startDate.getMonth().length(Year.isLeap(year));
+                        
+                        if (day < 1 || day > maxDaysInMonth) {
+                            System.err.println("Invalid day: " + day + " for month: " + startDate.getMonth() + 
+                                               " in line: " + line + " - using day 1 instead");
+                            day = 1; // Default to day 1 if invalid
+                        }
+
+                        LocalDateTime arrivalDateTime = LocalDateTime.of(year, month, day, hour, minute);
                         LocalDateTime dueDateTime = arrivalDateTime.plusHours(limitHours);
 
                         if (!arrivalDateTime.isBefore(startDate) && 

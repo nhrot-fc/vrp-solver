@@ -8,11 +8,14 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
 import com.vroute.models.Environment;
+import com.vroute.orchest.Event;
+import com.vroute.orchest.Orchestrator;
 
 public class SimulationApp extends JFrame {
     private EnvironmentRenderer environmentRenderer;
     private ControlPanel controlPanel;
     private Environment environment;
+    private Orchestrator orchestrator;
     private JScrollPane mapScrollPane;
     
     public SimulationApp() {
@@ -69,7 +72,13 @@ public class SimulationApp extends JFrame {
         // Setup listener for the advance time button
         controlPanel.setAdvanceTimeListener(e -> {
             if (environment != null) {
-                environment.advanceTime(1);
+                if (orchestrator != null) {
+                    // Use orchestrator's advanceTime method
+                    orchestrator.advanceTime(1);
+                } else {
+                    // Fallback to direct environment advancement
+                    environment.advanceTime(1);
+                }
                 updateUI();
             }
         });
@@ -142,6 +151,75 @@ public class SimulationApp extends JFrame {
         SwingUtilities.invokeLater(() -> {
             // Ensure scrollbars update and center on first load
             environmentRenderer.resetView();
+        });
+    }
+    
+    /**
+     * Sets the orchestrator and configures event handling
+     * 
+     * @param orchestrator The orchestrator to use
+     */
+    public void setOrchestrator(Orchestrator orchestrator) {
+        this.orchestrator = orchestrator;
+        
+        if (orchestrator != null) {
+            // Subscribe to orchestrator events
+            orchestrator.addEventListener(this::handleEvent);
+            
+            // Configure control panel actions
+            controlPanel.setStartAction(e -> startSimulation());
+            controlPanel.setPauseAction(e -> stopSimulation());
+            controlPanel.setResetAction(e -> resetSimulation());
+        }
+    }
+    
+    /**
+     * Starts the simulation
+     */
+    private void startSimulation() {
+        if (orchestrator == null) return;
+        
+        // Create a timer to advance the simulation
+        Timer simulationTimer = new Timer(controlPanel.getSimulationSpeed(), e -> {
+            orchestrator.advanceTime(1);
+            updateUI();
+        });
+        
+        simulationTimer.start();
+        controlPanel.setSimulationTimer(simulationTimer);
+    }
+    
+    /**
+     * Stops the simulation
+     */
+    private void stopSimulation() {
+        controlPanel.stopSimulation();
+    }
+    
+    /**
+     * Resets the simulation (placeholder - actual implementation would recreate the environment)
+     */
+    private void resetSimulation() {
+        // Stop the simulation first
+        stopSimulation();
+        
+        // For a real reset, we would need to recreate the environment
+        JOptionPane.showMessageDialog(
+                this,
+                "Reset functionality would recreate the environment from initial data.",
+                "Reset Simulation",
+                JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    /**
+     * Handle events from the orchestrator
+     * @param event The event to handle
+     */
+    private void handleEvent(Event event) {
+        // Update the UI when events occur
+        SwingUtilities.invokeLater(() -> {
+            updateUI();
+            // Could also display event notifications or highlight related entities
         });
     }
     
