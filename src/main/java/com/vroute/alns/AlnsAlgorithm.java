@@ -14,6 +14,7 @@ import com.vroute.alns.operators.RepairOperator;
 import com.vroute.alns.operators.WorstRemovalOperator;
 import com.vroute.models.Environment;
 import com.vroute.models.Order;
+import com.vroute.solution.Evaluator;
 import com.vroute.solution.SIHSolver;
 import com.vroute.solution.Solution;
 import com.vroute.solution.Solver;
@@ -112,8 +113,7 @@ public class AlnsAlgorithm implements Solver {
         
         Solution bestSolution = new Solution(
             currentSolution.getOrders(), 
-            currentSolution.getRoutes(), 
-            currentSolution.getCost()
+            currentSolution.getRoutes()
         );
         
         // Initialize scoring parameters for adaptive weight adjustment
@@ -144,8 +144,8 @@ public class AlnsAlgorithm implements Solver {
             Solution newSolution = repairOperator.repair(destroyedSolution, env);
             
             // Evaluate the new solution
-            double currentCost = currentSolution.getCost();
-            double newCost = newSolution.recalculateCost();
+            double currentCost = Evaluator.evaluateSolution(env, currentSolution);
+            double newCost = Evaluator.evaluateSolution(env, newSolution);
             
             double score = 0.0;
             
@@ -154,11 +154,10 @@ public class AlnsAlgorithm implements Solver {
                 currentSolution = newSolution;
                 
                 // Update scores based on solution quality
-                if (newCost < bestSolution.getCost()) {
+                if (newCost < Evaluator.evaluateSolution(env, bestSolution)) {
                     bestSolution = new Solution(
                         newSolution.getOrders(), 
-                        newSolution.getRoutes(), 
-                        newCost
+                        newSolution.getRoutes()
                     );
                     score = SIGMA_1; // New global best
                     iterationsWithoutImprovement = 0;
@@ -208,12 +207,12 @@ public class AlnsAlgorithm implements Solver {
             if (iterations % 100 == 0) {
                 System.out.println("Iteration " + iterations + ", temperature " + 
                                   simulatedAnnealing.getTemperature() + 
-                                  ", best cost " + bestSolution.getCost());
+                                  ", best cost " + Evaluator.evaluateSolution(env, bestSolution));
             }
         }
         
         System.out.println("ALNS completed after " + iterations + " iterations");
-        System.out.println("Final solution cost: " + bestSolution.getCost());
+        System.out.println("Final solution cost: " + Evaluator.evaluateSolution(env, bestSolution));
         
         return bestSolution;
     }

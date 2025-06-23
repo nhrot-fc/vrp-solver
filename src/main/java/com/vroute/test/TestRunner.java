@@ -8,9 +8,6 @@ public class TestRunner {
     public static void main(String[] args) {
         System.out.println("=== INICIANDO FRAMEWORK DE TESTING V-ROUTE ===");
         
-        // Activar modo debug del evaluador para tests
-        com.vroute.solution.Evaluator.setDebugMode(true);
-        
         // Crear el runner de tests
         TestFramework.TestRunner runner = new TestFramework.TestRunner();
         
