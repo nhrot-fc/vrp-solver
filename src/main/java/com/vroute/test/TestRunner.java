@@ -14,6 +14,7 @@ public class TestRunner {
         // Registrar suites de tests
         runner.addSuite(EvaluatorTestSuite.createSuite());
         runner.addSuite(SIHSolverTestSuite.createSuite());
+        runner.addSuite(TabuSearchTestSuite.createSuite());
         
         // Ejecutar todos los tests y obtener el reporte
         TestFramework.TestReport report = runner.runAll();

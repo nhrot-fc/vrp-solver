@@ -4,308 +4,298 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import com.vroute.models.Environment;
 import com.vroute.solution.OrderStop;
 import com.vroute.solution.Route;
 import com.vroute.solution.RouteStop;
 import com.vroute.solution.Solution;
 
 /**
- * Generates different types of moves for a given solution.
+ * Generates neighborhood moves for tabu search
  */
 public class MoveGenerator {
     private final Random random;
-    private Environment environment;
     
-    /**
-     * Creates a new move generator with a random seed.
-     */
     public MoveGenerator() {
         this.random = new Random();
     }
     
     /**
-     * Creates a new move generator with a specified seed.
-     * 
-     * @param seed The random seed
+     * Generate a random move from all possible move types
+     * @param solution Current solution
+     * @return A random TabuMove
      */
-    public MoveGenerator(long seed) {
-        this.random = new Random(seed);
-    }
-    
-    /**
-     * Sets the environment reference for path calculations.
-     * 
-     * @param env The environment containing road and blockage information
-     */
-    public void setEnvironment(Environment env) {
-        this.environment = env;
+    public TabuMove generateRandomMove(Solution solution) {
+        int moveType = random.nextInt(5); // 5 different move types
         
-        // Set environment in all move types
-        RelocateMove.setEnvironment(env);
-        SwapMove.setEnvironment(env);
-        TwoOptMove.setEnvironment(env);
-    }
-    
-    /**
-     * Generate a list of relocate moves for the given solution.
-     * 
-     * @param solution The current solution
-     * @param maxMoves Maximum number of moves to generate
-     * @return List of relocate moves
-     */
-    public List<RelocateMove> generateRelocateMoves(Solution solution, int maxMoves) {
-        if (environment == null) {
-            throw new IllegalStateException("Environment not set for path calculations");
+        switch (moveType) {
+            case 0:
+                return generateRelocateMove(solution);
+            case 1:
+                return generateSwapMove(solution);
+            case 2:
+                return generateTwoOptMove(solution);
+            case 3:
+                return generateInterRouteRelocateMove(solution);
+            case 4:
+                return generateInterRouteSwapMove(solution);
+            default:
+                return generateRelocateMove(solution); // Default to relocate move
         }
-        
-        List<RelocateMove> moves = new ArrayList<>();
+    }
+    
+    /**
+     * Generate a random relocate move
+     * @param solution Current solution
+     * @return A relocate move
+     */
+    public RelocateMove generateRelocateMove(Solution solution) {
         List<Route> routes = solution.getRoutes();
-        
-        if (routes.size() <= 1) {
-            return moves; // Not enough routes for relocate moves
-        }
-        
-        // For each route pair, find order stops that can be relocated
-        for (int i = 0; i < routes.size(); i++) {
-            Route sourceRoute = routes.get(i);
-            List<RouteStop> sourceStops = sourceRoute.getStops();
-            
-            // Find order stops in the source route
-            List<Integer> orderPositions = new ArrayList<>();
-            for (int pos = 0; pos < sourceStops.size(); pos++) {
-                if (sourceStops.get(pos) instanceof OrderStop) {
-                    orderPositions.add(pos);
-                }
-            }
-            
-            if (orderPositions.isEmpty()) {
-                continue; // No orders to relocate
-            }
-            
-            // For each target route
-            for (int j = 0; j < routes.size(); j++) {
-                if (i == j) continue; // Skip same route
-                
-                Route targetRoute = routes.get(j);
-                List<RouteStop> targetStops = targetRoute.getStops();
-                
-                // For some random order positions in source
-                int numToGenerate = Math.min(maxMoves / routes.size(), orderPositions.size());
-                for (int k = 0; k < numToGenerate; k++) {
-                    // Pick a random order position
-                    int pickIndex = random.nextInt(orderPositions.size());
-                    int sourcePosition = orderPositions.get(pickIndex);
-                    OrderStop orderStop = (OrderStop) sourceStops.get(sourcePosition);
-                    
-                    // Pick a random insert position in target
-                    int targetPosition = random.nextInt(targetStops.size() + 1);
-                    
-                    // Create the move
-                    RelocateMove move = new RelocateMove(
-                            sourceRoute.getId(),
-                            targetRoute.getId(),
-                            sourcePosition,
-                            targetPosition,
-                            orderStop.getEntityID());
-                    
-                    moves.add(move);
-                    
-                    // Remove this position to avoid duplicates
-                    orderPositions.remove(pickIndex);
-                    if (orderPositions.isEmpty()) {
-                        break;
-                    }
-                }
-            }
-        }
-        
-        return moves;
-    }
-    
-    /**
-     * Generate a list of swap moves for the given solution.
-     * 
-     * @param solution The current solution
-     * @param maxMoves Maximum number of moves to generate
-     * @return List of swap moves
-     */
-    public List<SwapMove> generateSwapMoves(Solution solution, int maxMoves) {
-        if (environment == null) {
-            throw new IllegalStateException("Environment not set for path calculations");
-        }
-        
-        List<SwapMove> moves = new ArrayList<>();
-        List<Route> routes = solution.getRoutes();
-        
         if (routes.isEmpty()) {
-            return moves;
+            return null;
         }
         
-        int movesGenerated = 0;
-        
-        // For each route (inter-route swaps)
-        for (int i = 0; i < routes.size(); i++) {
-            Route firstRoute = routes.get(i);
-            List<RouteStop> firstStops = firstRoute.getStops();
-            
-            // Find order stops in the first route
-            List<Integer> firstOrderPositions = new ArrayList<>();
-            for (int pos = 0; pos < firstStops.size(); pos++) {
-                if (firstStops.get(pos) instanceof OrderStop) {
-                    firstOrderPositions.add(pos);
-                }
-            }
-            
-            if (firstOrderPositions.isEmpty()) {
-                continue;
-            }
-            
-            // For each other route
-            for (int j = i; j < routes.size(); j++) {
-                Route secondRoute = routes.get(j);
-                List<RouteStop> secondStops = secondRoute.getStops();
-                
-                // Find order stops in the second route
-                List<Integer> secondOrderPositions = new ArrayList<>();
-                for (int pos = 0; pos < secondStops.size(); pos++) {
-                    if (secondStops.get(pos) instanceof OrderStop) {
-                        secondOrderPositions.add(pos);
-                    }
-                }
-                
-                if (secondOrderPositions.isEmpty() || 
-                    (i == j && secondOrderPositions.size() < 2)) {
-                    continue;
-                }
-                
-                // Generate swaps
-                int numMoves = Math.min(maxMoves / (routes.size() * routes.size()), 
-                                      Math.min(firstOrderPositions.size(), secondOrderPositions.size()));
-                
-                for (int k = 0; k < numMoves && movesGenerated < maxMoves; k++) {
-                    // Select random positions
-                    int firstIdx = random.nextInt(firstOrderPositions.size());
-                    int firstPos = firstOrderPositions.get(firstIdx);
-                    
-                    int secondIdx;
-                    if (i == j) {
-                        // For same route, make sure we pick different positions
-                        do {
-                            secondIdx = random.nextInt(secondOrderPositions.size());
-                        } while (secondOrderPositions.get(secondIdx).equals(firstPos));
-                    } else {
-                        secondIdx = random.nextInt(secondOrderPositions.size());
-                    }
-                    int secondPos = secondOrderPositions.get(secondIdx);
-                    
-                    // Create the swap move
-                    OrderStop firstOrderStop = (OrderStop) firstStops.get(firstPos);
-                    OrderStop secondOrderStop = (OrderStop) secondStops.get(secondPos);
-                    
-                    SwapMove move = new SwapMove(
-                            firstRoute.getId(),
-                            secondRoute.getId(),
-                            firstPos,
-                            secondPos,
-                            firstOrderStop.getEntityID(),
-                            secondOrderStop.getEntityID());
-                    
-                    moves.add(move);
-                    movesGenerated++;
-                    
-                    // Remove used positions
-                    firstOrderPositions.remove(firstIdx);
-                    if (i == j) {
-                        // For same route, adjust second positions too
-                        secondOrderPositions = new ArrayList<>(firstOrderPositions);
-                    } else {
-                        secondOrderPositions.remove(secondIdx);
-                    }
-                    
-                    if (firstOrderPositions.isEmpty() || 
-                        secondOrderPositions.isEmpty()) {
-                        break;
-                    }
-                }
-            }
+        // Select a random route with at least one OrderStop
+        List<Integer> validRouteIndices = getRoutesWithOrderStops(solution);
+        if (validRouteIndices.isEmpty()) {
+            return null;
         }
         
-        return moves;
+        int routeIndex = validRouteIndices.get(random.nextInt(validRouteIndices.size()));
+        Route route = routes.get(routeIndex);
+        List<RouteStop> stops = route.getStops();
+        
+        // Find all OrderStop indices
+        List<Integer> orderStopIndices = findOrderStopIndices(stops);
+        if (orderStopIndices.isEmpty()) {
+            return null;
+        }
+        
+        // Select a random OrderStop to move
+        int fromIndex = orderStopIndices.get(random.nextInt(orderStopIndices.size()));
+        
+        // Select a random insertion point (avoiding the fromIndex and depot stops)
+        int toIndex;
+        do {
+            toIndex = 1 + random.nextInt(stops.size() - 2); // Avoid first and last positions (depots)
+        } while (toIndex == fromIndex);
+        
+        return new RelocateMove(routeIndex, fromIndex, toIndex);
     }
     
     /**
-     * Generate a list of 2-opt moves for the given solution.
-     * 
-     * @param solution The current solution
-     * @param maxMoves Maximum number of moves to generate
-     * @return List of 2-opt moves
+     * Generate a random swap move
+     * @param solution Current solution
+     * @return A swap move
      */
-    public List<TwoOptMove> generateTwoOptMoves(Solution solution, int maxMoves) {
-        if (environment == null) {
-            throw new IllegalStateException("Environment not set for path calculations");
+    public SwapMove generateSwapMove(Solution solution) {
+        List<Route> routes = solution.getRoutes();
+        if (routes.isEmpty()) {
+            return null;
         }
         
-        List<TwoOptMove> moves = new ArrayList<>();
+        // Select a random route with at least two OrderStops
+        List<Integer> validRouteIndices = getRoutesWithMultipleOrderStops(solution);
+        if (validRouteIndices.isEmpty()) {
+            return null;
+        }
+        
+        int routeIndex = validRouteIndices.get(random.nextInt(validRouteIndices.size()));
+        Route route = routes.get(routeIndex);
+        List<RouteStop> stops = route.getStops();
+        
+        // Find all OrderStop indices
+        List<Integer> orderStopIndices = findOrderStopIndices(stops);
+        if (orderStopIndices.size() < 2) {
+            return null;
+        }
+        
+        // Select two different random OrderStops to swap
+        int firstIdx = random.nextInt(orderStopIndices.size());
+        int secondIdx;
+        do {
+            secondIdx = random.nextInt(orderStopIndices.size());
+        } while (secondIdx == firstIdx);
+        
+        int firstIndex = orderStopIndices.get(firstIdx);
+        int secondIndex = orderStopIndices.get(secondIdx);
+        
+        return new SwapMove(routeIndex, firstIndex, secondIndex);
+    }
+    
+    /**
+     * Generate a random 2-opt move
+     * @param solution Current solution
+     * @return A 2-opt move
+     */
+    public TwoOptMove generateTwoOptMove(Solution solution) {
+        List<Route> routes = solution.getRoutes();
+        if (routes.isEmpty()) {
+            return null;
+        }
+        
+        // Select a random route with at least 4 stops (we need at least 2 OrderStops to invert)
+        List<Integer> validRouteIndices = getRoutesWithMultipleOrderStops(solution);
+        if (validRouteIndices.isEmpty()) {
+            return null;
+        }
+        
+        int routeIndex = validRouteIndices.get(random.nextInt(validRouteIndices.size()));
+        Route route = routes.get(routeIndex);
+        List<RouteStop> stops = route.getStops();
+        
+        // Choose two random positions (ensuring they are at least 2 positions apart)
+        int minPos = 1; // Skip first depot
+        int maxPos = stops.size() - 2; // Skip last depot
+        
+        if (maxPos - minPos < 2) {
+            return null; // Not enough stops to perform 2-opt
+        }
+        
+        int fromIndex = minPos + random.nextInt(maxPos - minPos - 1);
+        int toIndex = fromIndex + 1 + random.nextInt(maxPos - fromIndex);
+        
+        return new TwoOptMove(routeIndex, fromIndex, toIndex);
+    }
+    
+    /**
+     * Generate a random inter-route relocate move
+     * @param solution Current solution
+     * @return An inter-route relocate move
+     */
+    public InterRouteRelocateMove generateInterRouteRelocateMove(Solution solution) {
+        List<Route> routes = solution.getRoutes();
+        if (routes.size() < 2) {
+            return null; // Need at least 2 routes
+        }
+        
+        // Select a source route with at least one OrderStop
+        List<Integer> sourceRouteIndices = getRoutesWithOrderStops(solution);
+        if (sourceRouteIndices.isEmpty()) {
+            return null;
+        }
+        
+        int fromRouteIndex = sourceRouteIndices.get(random.nextInt(sourceRouteIndices.size()));
+        
+        // Select a different target route
+        int toRouteIndex;
+        do {
+            toRouteIndex = random.nextInt(routes.size());
+        } while (toRouteIndex == fromRouteIndex);
+        
+        Route fromRoute = routes.get(fromRouteIndex);
+        Route toRoute = routes.get(toRouteIndex);
+        
+        // Find an OrderStop in the source route
+        List<Integer> orderStopIndices = findOrderStopIndices(fromRoute.getStops());
+        if (orderStopIndices.isEmpty()) {
+            return null;
+        }
+        
+        // Select a random OrderStop to move
+        int fromStopIndex = orderStopIndices.get(random.nextInt(orderStopIndices.size()));
+        
+        // Select a random insertion point in the target route
+        int toStopIndex = 1 + random.nextInt(toRoute.getStops().size() - 1); // Avoid first position (start depot)
+        
+        return new InterRouteRelocateMove(fromRouteIndex, fromStopIndex, toRouteIndex, toStopIndex);
+    }
+    
+    /**
+     * Generate a random inter-route swap move
+     * @param solution Current solution
+     * @return An inter-route swap move
+     */
+    public InterRouteSwapMove generateInterRouteSwapMove(Solution solution) {
+        List<Route> routes = solution.getRoutes();
+        if (routes.size() < 2) {
+            return null; // Need at least 2 routes
+        }
+        
+        // Select two different routes with at least one OrderStop each
+        List<Integer> routesWithOrderStops = getRoutesWithOrderStops(solution);
+        if (routesWithOrderStops.size() < 2) {
+            return null;
+        }
+        
+        // Select first route
+        int firstRouteIdx = random.nextInt(routesWithOrderStops.size());
+        int firstRouteIndex = routesWithOrderStops.get(firstRouteIdx);
+        
+        // Select second route (different from first)
+        int secondRouteIdx;
+        do {
+            secondRouteIdx = random.nextInt(routesWithOrderStops.size());
+        } while (secondRouteIdx == firstRouteIdx);
+        int secondRouteIndex = routesWithOrderStops.get(secondRouteIdx);
+        
+        Route firstRoute = routes.get(firstRouteIndex);
+        Route secondRoute = routes.get(secondRouteIndex);
+        
+        // Find OrderStops in each route
+        List<Integer> firstOrderStopIndices = findOrderStopIndices(firstRoute.getStops());
+        List<Integer> secondOrderStopIndices = findOrderStopIndices(secondRoute.getStops());
+        
+        if (firstOrderStopIndices.isEmpty() || secondOrderStopIndices.isEmpty()) {
+            return null;
+        }
+        
+        // Select a random OrderStop from each route
+        int firstStopIndex = firstOrderStopIndices.get(random.nextInt(firstOrderStopIndices.size()));
+        int secondStopIndex = secondOrderStopIndices.get(random.nextInt(secondOrderStopIndices.size()));
+        
+        return new InterRouteSwapMove(firstRouteIndex, firstStopIndex, secondRouteIndex, secondStopIndex);
+    }
+    
+    /**
+     * Find all routes that have at least one OrderStop
+     */
+    private List<Integer> getRoutesWithOrderStops(Solution solution) {
+        List<Integer> validRoutes = new ArrayList<>();
         List<Route> routes = solution.getRoutes();
         
-        if (routes.isEmpty()) {
-            return moves;
-        }
-        
-        int movesGenerated = 0;
-        int movesPerRoute = maxMoves / routes.size();
-        
-        for (Route route : routes) {
-            List<RouteStop> stops = route.getStops();
-            
-            // Need at least 4 stops for 2-opt to make sense
-            if (stops.size() < 4) {
-                continue;
-            }
-            
-            // Generate moves for this route
-            for (int k = 0; k < movesPerRoute && movesGenerated < maxMoves; k++) {
-                // Pick random start and end positions
-                // Ensure they're at least 2 positions apart
-                int startPos = random.nextInt(stops.size() - 3);
-                int endPos = startPos + 2 + random.nextInt(stops.size() - startPos - 2);
-                
-                TwoOptMove move = new TwoOptMove(route.getId(), startPos, endPos);
-                moves.add(move);
-                movesGenerated++;
+        for (int i = 0; i < routes.size(); i++) {
+            Route route = routes.get(i);
+            if (route.getStops().stream().anyMatch(s -> s instanceof OrderStop)) {
+                validRoutes.add(i);
             }
         }
         
-        return moves;
+        return validRoutes;
     }
     
     /**
-     * Generate all types of moves for the given solution.
-     * 
-     * @param solution The current solution
-     * @param maxMovesPerType Maximum number of moves to generate per type
-     * @return List of all moves
+     * Find all routes that have at least two OrderStops
      */
-    public List<TabuMove> generateAllMoves(Solution solution, int maxMovesPerType) {
-        if (environment == null) {
-            throw new IllegalStateException("Environment not set for path calculations");
+    private List<Integer> getRoutesWithMultipleOrderStops(Solution solution) {
+        List<Integer> validRoutes = new ArrayList<>();
+        List<Route> routes = solution.getRoutes();
+        
+        for (int i = 0; i < routes.size(); i++) {
+            Route route = routes.get(i);
+            long orderStopCount = route.getStops().stream()
+                    .filter(s -> s instanceof OrderStop)
+                    .count();
+            
+            if (orderStopCount >= 2) {
+                validRoutes.add(i);
+            }
         }
         
-        List<TabuMove> allMoves = new ArrayList<>();
+        return validRoutes;
+    }
+    
+    /**
+     * Find indices of all OrderStops in a route
+     */
+    private List<Integer> findOrderStopIndices(List<RouteStop> stops) {
+        List<Integer> indices = new ArrayList<>();
         
-        // Generate relocate moves
-        List<RelocateMove> relocateMoves = generateRelocateMoves(solution, maxMovesPerType);
-        allMoves.addAll(relocateMoves);
+        for (int i = 0; i < stops.size(); i++) {
+            if (stops.get(i) instanceof OrderStop) {
+                indices.add(i);
+            }
+        }
         
-        // Generate swap moves
-        List<SwapMove> swapMoves = generateSwapMoves(solution, maxMovesPerType);
-        allMoves.addAll(swapMoves);
-        
-        // Generate 2-opt moves
-        List<TwoOptMove> twoOptMoves = generateTwoOptMoves(solution, maxMovesPerType);
-        allMoves.addAll(twoOptMoves);
-        
-        return allMoves;
+        return indices;
     }
 } 

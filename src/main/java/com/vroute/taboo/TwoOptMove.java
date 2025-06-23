@@ -4,157 +4,117 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
-import com.vroute.models.Constants;
-import com.vroute.models.Environment;
-import com.vroute.models.Order;
-import com.vroute.models.Vehicle;
-import com.vroute.pathfinding.PathFinder;
-import com.vroute.pathfinding.PathResult;
+import com.vroute.models.Position;
 import com.vroute.solution.OrderStop;
 import com.vroute.solution.Route;
 import com.vroute.solution.RouteStop;
 import com.vroute.solution.Solution;
 
 /**
- * A move that performs a 2-opt operation within a single route.
- * This reverses the order of stops between two positions to reduce crossing paths.
+ * A 2-opt move that inverts a segment of a route to improve it
  */
 public class TwoOptMove implements TabuMove {
-    private final String routeId;
-    private final int startPos; // Starting position for the segment to reverse
-    private final int endPos;   // Ending position for the segment to reverse
-    
-    // Reference to the environment for path calculations
-    private static Environment environment;
-
-    public TwoOptMove(String routeId, int startPos, int endPos) {
-        this.routeId = routeId;
-        this.startPos = startPos;
-        this.endPos = endPos;
-    }
+    private final int routeIndex;
+    private final int fromIndex;
+    private final int toIndex;
+    private Solution solution;
     
     /**
-     * Sets the environment for path calculations.
-     * This must be called before using any move operations.
-     * 
-     * @param env The environment instance
+     * Create a 2-opt move
+     * @param routeIndex Index of the route in the solution
+     * @param fromIndex Start index of the segment to invert (inclusive)
+     * @param toIndex End index of the segment to invert (inclusive)
      */
-    public static void setEnvironment(Environment env) {
-        environment = env;
-    }
-
-    @Override
-    public Solution apply(Solution solution) {
-        if (environment == null) {
-            System.err.println("Environment not set for path calculations in TwoOptMove");
-            return solution;
-        }
-        
-        // Clone the solution to avoid modifying the original
-        Map<String, Order> orders = solution.getOrders();
-        List<Route> originalRoutes = solution.getRoutes();
-        
-        // Find the route
-        Route route = null;
-        for (Route r : originalRoutes) {
-            if (r.getId().equals(routeId)) {
-                route = r;
-                break;
-            }
-        }
-        
-        if (route == null) {
-            // Cannot apply move if route not found
-            return solution;
-        }
-        
-        // Check positions are valid
-        List<RouteStop> stops = route.getStops();
-        if (startPos < 0 || endPos >= stops.size() || startPos >= endPos) {
-            return solution;
-        }
-        
-        // Create new list with the segment reversed
-        List<RouteStop> newStops = new ArrayList<>(stops);
-        
-        // Reverse the segment between startPos and endPos
-        List<RouteStop> subList = new ArrayList<>(newStops.subList(startPos, endPos + 1));
-        Collections.reverse(subList);
-        
-        // Replace the segment in the original list
-        for (int i = startPos; i <= endPos; i++) {
-            newStops.set(i, subList.get(i - startPos));
-        }
-        
-        // Recalculate arrival times for the modified segment and all subsequent stops
-        recalculateRouteTimings(newStops, route.getVehicle(), startPos);
-        
-        // Create new route
-        Route newRoute = new Route(routeId, route.getVehicle(), newStops);
-        
-        // Create new routes list with the modified route
-        List<Route> newRoutes = new ArrayList<>(originalRoutes);
-        for (int i = 0; i < newRoutes.size(); i++) {
-            if (newRoutes.get(i).getId().equals(routeId)) {
-                newRoutes.set(i, newRoute);
-                break;
-            }
-        }
-        
-        return new Solution(orders, newRoutes);
+    public TwoOptMove(int routeIndex, int fromIndex, int toIndex) {
+        this.routeIndex = routeIndex;
+        // Ensure fromIndex < toIndex
+        this.fromIndex = Math.min(fromIndex, toIndex);
+        this.toIndex = Math.max(fromIndex, toIndex);
     }
     
-    private void recalculateRouteTimings(List<RouteStop> stops, Vehicle vehicle, int startPosition) {
-        if (stops.size() <= startPosition) {
-            return; // Nothing to recalculate
+    @Override
+    public boolean apply(Solution solution) {
+        this.solution = solution;
+        
+        // Get the route to modify
+        List<Route> routes = solution.getRoutes();
+        if (routeIndex >= routes.size()) {
+            return false;
         }
         
-        for (int i = startPosition; i < stops.size(); i++) {
-            if (i == 0) {
-                // First stop uses vehicle's starting position
-                continue;
-            }
-            
-            RouteStop prevStop = stops.get(i - 1);
-            RouteStop currentStop = stops.get(i);
-            
-            // Calculate departure time from previous stop
-            LocalDateTime departureTime = prevStop.getArrivalTime().plusMinutes(Constants.GLP_SERVE_DURATION_MINUTES);
-            
-            // Calculate new arrival time
-            PathResult pathResult = PathFinder.findPath(
-                    environment, // Use the environment reference
-                    prevStop.getPosition(),
-                    currentStop.getPosition(),
-                    departureTime);
-            
-            if (!pathResult.isPathFound()) {
-                continue; // Maintain current timing if path not found
-            }
-            
-            // Update the arrival time for this stop
-            if (currentStop instanceof OrderStop) {
-                OrderStop orderStop = (OrderStop) currentStop;
-                stops.set(i, new OrderStop(
-                        orderStop.getEntityID(),
-                        orderStop.getPosition(),
-                        pathResult.getArrivalTime(),
-                        orderStop.getGlpDelivery()
-                ));
-            }
-            // Similarly handle DepotStop if needed
+        Route route = routes.get(routeIndex);
+        List<RouteStop> stops = route.getStops();
+        
+        // Validate indices
+        if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0 || 
+            fromIndex >= stops.size() || toIndex >= stops.size() ||
+            toIndex - fromIndex < 1) { // Need at least 2 elements to invert
+            return false;
         }
+        
+        // Make a backup of the original stops
+        List<RouteStop> originalStops = new ArrayList<>(stops);
+        
+        // Invert the segment
+        Collections.reverse(stops.subList(fromIndex, toIndex + 1));
+        
+        // Validate and recalculate arrival times
+        if (!recalculateArrivalTimes(route)) {
+            // If invalid, revert to original
+            for (int i = 0; i < stops.size(); i++) {
+                stops.set(i, originalStops.get(i));
+            }
+            return false;
+        }
+        
+        return true;
     }
-
+    
+    private boolean recalculateArrivalTimes(Route route) {
+        List<RouteStop> stops = route.getStops();
+        if (stops.isEmpty()) {
+            return true;
+        }
+        
+        // Starting from the first stop, recalculate arrival times for all stops
+        LocalDateTime currentTime = stops.get(0).getArrivalTime();
+        
+        for (int i = 1; i < stops.size(); i++) {
+            RouteStop current = stops.get(i);
+            RouteStop previous = stops.get(i - 1);
+            
+            // Calculate travel time from previous stop to current stop
+            Position prevPos = previous.getPosition();
+            Position currPos = current.getPosition();
+            double distance = prevPos.distanceTo(currPos);
+            
+            // Assuming a constant speed of 50 km/h for simplicity
+            double travelTimeHours = distance / 50.0;
+            int travelTimeMinutes = (int) Math.ceil(travelTimeHours * 60);
+            
+            // Update arrival time
+            currentTime = currentTime.plusMinutes(travelTimeMinutes);
+            
+            // Check if the stop is an OrderStop, and if so, validate delivery time
+            if (current instanceof OrderStop) {
+                OrderStop orderStop = (OrderStop) current;
+                String orderId = orderStop.getEntityID();
+                if (solution.getOrders().containsKey(orderId)) {
+                    LocalDateTime dueTime = solution.getOrders().get(orderId).getDueTime();
+                    if (currentTime.isAfter(dueTime)) {
+                        // Delivery would be late, move is invalid
+                        return false;
+                    }
+                }
+            }
+        }
+        
+        return true;
+    }
+    
     @Override
     public String getTabuKey() {
-        return "TWOOPT_" + routeId + "_" + startPos + "_" + endPos;
-    }
-    
-    @Override
-    public String toString() {
-        return "TwoOptMove: reverse segment [" + startPos + "-" + endPos + "] in route " + routeId;
+        return "2opt_" + routeIndex + "_" + fromIndex + "_" + toIndex;
     }
 } 

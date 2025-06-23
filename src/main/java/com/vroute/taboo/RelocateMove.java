@@ -1,236 +1,122 @@
 package com.vroute.taboo;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import com.vroute.models.Environment;
-import com.vroute.models.Order;
 import com.vroute.models.Position;
-import com.vroute.models.Vehicle;
-import com.vroute.models.Constants;
-import com.vroute.pathfinding.PathFinder;
-import com.vroute.pathfinding.PathResult;
 import com.vroute.solution.OrderStop;
 import com.vroute.solution.Route;
 import com.vroute.solution.RouteStop;
 import com.vroute.solution.Solution;
 
 /**
- * A move that relocates an order from one route to another.
+ * A move that relocates a stop from one position to another within the same route
  */
 public class RelocateMove implements TabuMove {
-    private final String sourceRouteId;
-    private final String targetRouteId;
-    private final int sourcePosition; // Position of the order stop in the source route
-    private final int targetPosition; // Position to insert the order stop in the target route
-    private final String orderId;
-    
-    // Reference to the environment for path calculations
-    private static Environment environment;
-
-    public RelocateMove(String sourceRouteId, String targetRouteId, int sourcePosition, 
-                        int targetPosition, String orderId) {
-        this.sourceRouteId = sourceRouteId;
-        this.targetRouteId = targetRouteId;
-        this.sourcePosition = sourcePosition;
-        this.targetPosition = targetPosition;
-        this.orderId = orderId;
-    }
+    private final int routeIndex;
+    private final int fromIndex;
+    private final int toIndex;
+    private Solution solution;
     
     /**
-     * Sets the environment for path calculations.
-     * This must be called before using any move operations.
-     * 
-     * @param env The environment instance
+     * Create a relocation move
+     * @param routeIndex Index of the route in the solution
+     * @param fromIndex Original position of the stop
+     * @param toIndex Target position for the stop
      */
-    public static void setEnvironment(Environment env) {
-        environment = env;
+    public RelocateMove(int routeIndex, int fromIndex, int toIndex) {
+        this.routeIndex = routeIndex;
+        this.fromIndex = fromIndex;
+        this.toIndex = toIndex;
     }
-
+    
     @Override
-    public Solution apply(Solution solution) {
-        if (environment == null) {
-            System.err.println("Environment not set for path calculations in RelocateMove");
-            return solution;
+    public boolean apply(Solution solution) {
+        this.solution = solution;
+        
+        // Get the route to modify
+        List<Route> routes = solution.getRoutes();
+        if (routeIndex >= routes.size()) {
+            return false;
         }
         
-        // Clone the solution to avoid modifying the original
-        Map<String, Order> orders = solution.getOrders();
-        List<Route> originalRoutes = solution.getRoutes();
+        Route route = routes.get(routeIndex);
+        List<RouteStop> stops = route.getStops();
         
-        // Find source and target routes
-        Route sourceRoute = null;
-        Route targetRoute = null;
-        
-        for (Route route : originalRoutes) {
-            if (route.getId().equals(sourceRouteId)) {
-                sourceRoute = route;
-            }
-            if (route.getId().equals(targetRouteId)) {
-                targetRoute = route;
-            }
+        // Validate indices
+        if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0 || 
+            fromIndex >= stops.size() || toIndex >= stops.size()) {
+            return false;
         }
         
-        if (sourceRoute == null || targetRoute == null) {
-            // Cannot apply move if routes not found
-            return solution;
+        // Cannot move depot stops
+        if (!(stops.get(fromIndex) instanceof OrderStop)) {
+            return false;
         }
         
-        // Create new lists of stops for both routes
-        List<RouteStop> newSourceStops = new ArrayList<>(sourceRoute.getStops());
-        List<RouteStop> newTargetStops = new ArrayList<>(targetRoute.getStops());
+        // Extract the stop to move
+        RouteStop stopToMove = stops.remove(fromIndex);
         
-        // Check if the source position is valid
-        if (sourcePosition < 0 || sourcePosition >= newSourceStops.size()) {
-            return solution;
+        // Insert at the target position
+        int actualToIndex = (fromIndex < toIndex) ? toIndex - 1 : toIndex;
+        stops.add(actualToIndex, stopToMove);
+        
+        // Validate and recalculate arrival times
+        if (!recalculateArrivalTimes(route)) {
+            // If invalid, revert the move
+            stops.remove(actualToIndex);
+            stops.add(fromIndex, stopToMove);
+            return false;
         }
         
-        // Get the stop to relocate
-        RouteStop stopToMove = newSourceStops.get(sourcePosition);
-        
-        // Check if it's an OrderStop
-        if (!(stopToMove instanceof OrderStop)) {
-            return solution;
-        }
-        
-        OrderStop orderStopToMove = (OrderStop) stopToMove;
-        
-        // Verify this is the correct order
-        if (!orderStopToMove.getEntityID().equals(orderId)) {
-            return solution;
-        }
-        
-        // Remove from source route
-        newSourceStops.remove(sourcePosition);
-        
-        // Calculate the new arrival time for the order in the target route
-        OrderStop updatedOrderStop = recalculateOrderStop(orderStopToMove, targetRoute, targetPosition);
-        if (updatedOrderStop == null) {
-            // Move is not feasible
-            return solution;
-        }
-        
-        // Insert into target route
-        if (targetPosition <= newTargetStops.size()) {
-            newTargetStops.add(targetPosition, updatedOrderStop);
-        } else {
-            newTargetStops.add(updatedOrderStop);
-        }
-        
-        // Recalculate arrival times for all subsequent stops in both routes
-        recalculateRouteTimings(newSourceStops, sourceRoute.getVehicle(), sourcePosition);
-        recalculateRouteTimings(newTargetStops, targetRoute.getVehicle(), targetPosition);
-        
-        // Create new routes
-        List<Route> newRoutes = new ArrayList<>(originalRoutes);
-        
-        // Replace the modified routes
-        for (int i = 0; i < newRoutes.size(); i++) {
-            Route route = newRoutes.get(i);
-            if (route.getId().equals(sourceRouteId)) {
-                newRoutes.set(i, new Route(sourceRouteId, sourceRoute.getVehicle(), newSourceStops));
-            } else if (route.getId().equals(targetRouteId)) {
-                newRoutes.set(i, new Route(targetRouteId, targetRoute.getVehicle(), newTargetStops));
-            }
-        }
-        
-        // Create and return the new solution
-        return new Solution(orders, newRoutes);
+        return true;
     }
     
-    private OrderStop recalculateOrderStop(OrderStop orderStop, Route targetRoute, int targetPosition) {
-        Vehicle vehicle = targetRoute.getVehicle();
-        List<RouteStop> targetStops = targetRoute.getStops();
-        
-        // Determine the position before insertion
-        Position prevPosition;
-        LocalDateTime departureTime;
-        
-        if (targetPosition == 0) {
-            // If inserting at the start, use the vehicle's current position
-            prevPosition = vehicle.getCurrentPosition();
-            departureTime = LocalDateTime.now(); // This should be obtained from the solution context
-        } else {
-            // Otherwise, use the previous stop's position
-            RouteStop prevStop = targetStops.get(targetPosition - 1);
-            prevPosition = prevStop.getPosition();
-            departureTime = prevStop.getArrivalTime().plusMinutes(Constants.GLP_SERVE_DURATION_MINUTES);
+    private boolean recalculateArrivalTimes(Route route) {
+        List<RouteStop> stops = route.getStops();
+        if (stops.isEmpty()) {
+            return true;
         }
         
-        // Calculate the path to the new position
-        PathResult pathResult = PathFinder.findPath(
-                environment, // Use the environment reference
-                prevPosition, 
-                orderStop.getPosition(),
-                departureTime);
+        // Starting from the first stop, recalculate arrival times for all stops
+        LocalDateTime currentTime = stops.get(0).getArrivalTime();
         
-        if (!pathResult.isPathFound()) {
-            return null; // Path not found, move is not feasible
+        for (int i = 1; i < stops.size(); i++) {
+            RouteStop current = stops.get(i);
+            RouteStop previous = stops.get(i - 1);
+            
+            // Calculate travel time from previous stop to current stop
+            Position prevPos = previous.getPosition();
+            Position currPos = current.getPosition();
+            double distance = prevPos.distanceTo(currPos);
+            
+            // Assuming a constant speed of 50 km/h for simplicity
+            // In a real implementation, this would consider vehicle speed, road conditions, etc.
+            double travelTimeHours = distance / 50.0;
+            int travelTimeMinutes = (int) Math.ceil(travelTimeHours * 60);
+            
+            // Update arrival time
+            currentTime = currentTime.plusMinutes(travelTimeMinutes);
+            
+            // Check if the stop is an OrderStop, and if so, validate delivery time
+            if (current instanceof OrderStop) {
+                OrderStop orderStop = (OrderStop) current;
+                String orderId = orderStop.getEntityID();
+                if (solution.getOrders().containsKey(orderId)) {
+                    LocalDateTime dueTime = solution.getOrders().get(orderId).getDueTime();
+                    if (currentTime.isAfter(dueTime)) {
+                        // Delivery would be late, move is invalid
+                        return false;
+                    }
+                }
+            }
         }
         
-        // Create a new OrderStop with updated arrival time
-        return new OrderStop(
-                orderStop.getEntityID(),
-                orderStop.getPosition(),
-                pathResult.getArrivalTime(),
-                orderStop.getGlpDelivery()
-        );
+        return true;
     }
     
-    private void recalculateRouteTimings(List<RouteStop> stops, Vehicle vehicle, int startPosition) {
-        if (stops.size() <= startPosition) {
-            return; // Nothing to recalculate
-        }
-        
-        for (int i = startPosition; i < stops.size(); i++) {
-            if (i == 0) {
-                // First stop uses vehicle's starting position
-                continue;
-            }
-            
-            RouteStop prevStop = stops.get(i - 1);
-            RouteStop currentStop = stops.get(i);
-            
-            // Calculate departure time from previous stop
-            LocalDateTime departureTime = prevStop.getArrivalTime().plusMinutes(Constants.GLP_SERVE_DURATION_MINUTES);
-            
-            // Calculate new arrival time
-            PathResult pathResult = PathFinder.findPath(
-                    environment, // Use the environment reference
-                    prevStop.getPosition(),
-                    currentStop.getPosition(),
-                    departureTime);
-            
-            if (!pathResult.isPathFound()) {
-                continue; // Maintain current timing if path not found
-            }
-            
-            // Update the arrival time for this stop
-            if (currentStop instanceof OrderStop) {
-                OrderStop orderStop = (OrderStop) currentStop;
-                stops.set(i, new OrderStop(
-                        orderStop.getEntityID(),
-                        orderStop.getPosition(),
-                        pathResult.getArrivalTime(),
-                        orderStop.getGlpDelivery()
-                ));
-            } 
-            // Similarly handle DepotStop if needed
-        }
-    }
-
     @Override
     public String getTabuKey() {
-        // The tabu key identifies the move for the tabu list
-        return "RELOCATE_" + orderId + "_FROM_" + sourceRouteId + "_TO_" + targetRouteId;
-    }
-    
-    @Override
-    public String toString() {
-        return "RelocateMove: Order " + orderId + " from route " + sourceRouteId + 
-               " (pos " + sourcePosition + ") to route " + targetRouteId + 
-               " (pos " + targetPosition + ")";
+        return "relocate_" + routeIndex + "_" + fromIndex + "_" + toIndex;
     }
 } 

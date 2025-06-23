@@ -4,86 +4,44 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Manages the tabu list which stores the recently performed moves
- * to prevent cycling during the tabu search.
+ * Keeps track of recent moves that are forbidden (tabu)
  */
 public class TabuList {
-    private final Map<String, Integer> tabuMap;
-    private final int defaultTenure;
+    private final Map<String, Integer> tabuMoves;
+    private final int tabuTenure;
     
     /**
-     * Creates a new tabu list with the default tenure.
-     * 
-     * @param defaultTenure The number of iterations a move remains tabu
+     * Create a new tabu list with specified tabu tenure
+     * @param tabuTenure number of iterations a move remains tabu
      */
-    public TabuList(int defaultTenure) {
-        this.tabuMap = new HashMap<>();
-        this.defaultTenure = defaultTenure;
+    public TabuList(int tabuTenure) {
+        this.tabuMoves = new HashMap<>();
+        this.tabuTenure = tabuTenure;
     }
     
     /**
-     * Add a move to the tabu list.
-     * 
-     * @param move The move to add
-     * @param currentIteration Current iteration of the search
-     */
-    public void addMove(TabuMove move, int currentIteration) {
-        String key = move.getTabuKey();
-        tabuMap.put(key, currentIteration + defaultTenure);
-    }
-    
-    /**
-     * Add a move to the tabu list with a custom tenure.
-     * 
-     * @param move The move to add
-     * @param currentIteration Current iteration of the search
-     * @param tenure The number of iterations this move remains tabu
-     */
-    public void addMove(TabuMove move, int currentIteration, int tenure) {
-        String key = move.getTabuKey();
-        tabuMap.put(key, currentIteration + tenure);
-    }
-    
-    /**
-     * Check if a move is in the tabu list.
-     * 
+     * Check if a move is tabu
      * @param move The move to check
-     * @param currentIteration Current iteration of the search
      * @return true if the move is tabu, false otherwise
      */
-    public boolean isTabu(TabuMove move, int currentIteration) {
-        String key = move.getTabuKey();
-        Integer expiration = tabuMap.get(key);
-        
-        if (expiration == null) {
-            return false;
-        }
-        
-        return expiration > currentIteration;
+    public boolean isTabu(TabuMove move) {
+        return tabuMoves.containsKey(move.getTabuKey());
     }
     
     /**
-     * Updates the tabu list by removing expired entries.
-     * 
-     * @param currentIteration Current iteration of the search
+     * Add a move to the tabu list
+     * @param move The move to make tabu
+     * @param currentIteration The current iteration number
      */
-    public void update(int currentIteration) {
-        tabuMap.entrySet().removeIf(entry -> entry.getValue() <= currentIteration);
+    public void addMove(TabuMove move, int currentIteration) {
+        tabuMoves.put(move.getTabuKey(), currentIteration + tabuTenure);
     }
     
     /**
-     * Clear the tabu list.
+     * Update the tabu list by removing expired tabu moves
+     * @param currentIteration The current iteration number
      */
-    public void clear() {
-        tabuMap.clear();
-    }
-    
-    /**
-     * Returns the size of the tabu list.
-     * 
-     * @return The number of moves currently in the tabu list
-     */
-    public int size() {
-        return tabuMap.size();
+    public void updateTabuList(int currentIteration) {
+        tabuMoves.entrySet().removeIf(entry -> entry.getValue() <= currentIteration);
     }
 } 
