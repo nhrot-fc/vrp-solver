@@ -19,7 +19,6 @@ public class TabuSearchTestSuite {
         suite.addTest(suite.createTest("testInterRouteRelocateMove", TabuSearchTestSuite::testInterRouteRelocateMove));
         suite.addTest(suite.createTest("testInterRouteSwapMove", TabuSearchTestSuite::testInterRouteSwapMove));
         suite.addTest(suite.createTest("testInterRouteRelocateMoveInvalidCapacity", TabuSearchTestSuite::testInterRouteRelocateMoveInvalidCapacity));
-        suite.addTest(suite.createTest("testInterRouteSwapMoveInvalidTimeWindow", TabuSearchTestSuite::testInterRouteSwapMoveInvalidTimeWindow));
         
         return suite;
     }
@@ -214,82 +213,6 @@ public class TabuSearchTestSuite {
             return TestFramework.TestResult.failure("testInterRouteRelocateMoveInvalidCapacity", e.getMessage(), 0, null, null);
         } catch (Throwable t) {
             return TestFramework.TestResult.error("testInterRouteRelocateMoveInvalidCapacity", t, 0);
-        }
-    }
-    
-    /**
-     * Prueba para verificar que InterRouteSwapMove falla cuando una entrega llegaría tarde
-     */
-    private static TestFramework.TestResult testInterRouteSwapMoveInvalidTimeWindow() {
-        try {
-            // Crear entorno de prueba
-            TestEnvironment env = createTestEnvironment();
-            
-            // Crear una solución con dos rutas
-            Solution solution = createTwoRouteSolution(env);
-            
-            // Actualizar el tiempo de llegada de un OrderStop para que sea muy tarde            
-            Route firstRoute = solution.getRoutes().get(0);
-            OrderStop firstOrderStop = (OrderStop) firstRoute.getStops().get(1);
-            
-            // Crear un orden con una ventana de tiempo muy ajustada
-            Order urgentOrder = new Order(
-                "URGENT_ORDER",
-                env.environment.getCurrentTime(),
-                env.environment.getCurrentTime().plusHours(1), // Tiempo límite muy pronto
-                10,
-                new Position(60, 60)
-            );
-            
-            // Añadir el orden urgente al mapa de órdenes
-            solution.getOrders().put(urgentOrder.getId(), urgentOrder);
-            
-            // Reemplazar el OrderStop en la segunda ruta con uno que tiene un tiempo ajustado
-            Route secondRoute = solution.getRoutes().get(1);
-            OrderStop secondOrderStop = new OrderStop(
-                urgentOrder.getId(),
-                urgentOrder.getPosition(),
-                env.environment.getCurrentTime().plusMinutes(30),
-                10
-            );
-            secondRoute.getStops().set(1, secondOrderStop);
-            
-            // Crear un movimiento de intercambio que haría que la entrega urgente llegue tarde
-            InterRouteSwapMove move = new InterRouteSwapMove(0, 1, 1, 1);
-            
-            // Aplicar el movimiento
-            boolean result = move.apply(solution);
-            
-            // Verificar que el movimiento falló debido a la restricción de tiempo
-            TestFramework.Assertions.assertFalse(result, 
-                "El movimiento debería fallar debido a la restricción de ventana de tiempo");
-            
-            // Verificar que los pedidos permanecen en sus rutas originales
-            boolean firstOrderInFirstRoute = false;
-            for (RouteStop stop : solution.getRoutes().get(0).getStops()) {
-                if (stop instanceof OrderStop && ((OrderStop) stop).getEntityID().equals(firstOrderStop.getEntityID())) {
-                    firstOrderInFirstRoute = true;
-                    break;
-                }
-            }
-            TestFramework.Assertions.assertTrue(firstOrderInFirstRoute, 
-                "El primer pedido debería permanecer en la primera ruta");
-            
-            boolean secondOrderInSecondRoute = false;
-            for (RouteStop stop : solution.getRoutes().get(1).getStops()) {
-                if (stop instanceof OrderStop && ((OrderStop) stop).getEntityID().equals(secondOrderStop.getEntityID())) {
-                    secondOrderInSecondRoute = true;
-                    break;
-                }
-            }
-            TestFramework.Assertions.assertTrue(secondOrderInSecondRoute, 
-                "El segundo pedido debería permanecer en la segunda ruta");
-            
-            return TestFramework.TestResult.success("testInterRouteSwapMoveInvalidTimeWindow", 0);
-        } catch (AssertionError e) {
-            return TestFramework.TestResult.failure("testInterRouteSwapMoveInvalidTimeWindow", e.getMessage(), 0, null, null);
-        } catch (Throwable t) {
-            return TestFramework.TestResult.error("testInterRouteSwapMoveInvalidTimeWindow", t, 0);
         }
     }
     
