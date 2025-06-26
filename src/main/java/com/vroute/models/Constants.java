@@ -123,6 +123,21 @@ public class Constants {
 
     // Constantes matemáticas
     public static final double EPSILON = 1e-9; // For floating-point comparisons
+    
+    /*
+     * =============================================
+     * DEBUG Y LOGGING
+     * =============================================
+     */
+    // Habilitar/deshabilitar mensajes de debug
+    public static final boolean DEBUG = true;
+    
+    /*
+     * =============================================
+     * FORMATTERS
+     * =============================================
+     */
+    public static final String DATE_TIME_FORMAT = "[dd-MM-yyyy HH:mm:ss]";
 
     private Constants() {
         // Avoid initialization

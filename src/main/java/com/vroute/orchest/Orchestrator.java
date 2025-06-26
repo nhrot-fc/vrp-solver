@@ -46,13 +46,11 @@ public class Orchestrator {
     private static final int SERVICE_TIME = 15; // Default service time in minutes
     private static final int DEPRATURE_TIME = 15; // Default departure time in minutes
     
-    private static final long MAX_TIME_WITHOUT_REPLAN_MINUTES = 40;
-
-    // Criterio 2: Umbral de nuevos pedidos para disparar una replanificación
-    private static final int REPLAN_ON_NEW_ORDERS_THRESHOLD = 10;
-
-    // Criterio 3: Ventana de tiempo para considerar un pedido "urgente" (en minutos)
-    private static final long URGENCY_WINDOW_MINUTES = 120;
+    // Tiempo entre replanificaciones (en minutos)
+    private static final long REPLAN_INTERVAL_MINUTES = 60;
+    
+    // Factor de demanda mínimo para justificar replanificación
+    private static final int DEMAND_FACTOR_THRESHOLD = 5;
 
     public Orchestrator(Environment initialEnvironment) {
         this.environment = initialEnvironment;
@@ -205,10 +203,21 @@ public class Orchestrator {
     }
     
     /**
+     * Helper method for debug output
+     * @param message The debug message to print
+     */
+    private void debug(String message) {
+        if (Constants.DEBUG) {
+            System.out.println("[DEBUG] " + message);
+        }
+    }
+    
+    /**
      * Process a single event based on its type
      */
     private void handleEvent(Event event) {
-        System.out.println("Handling event: " + event);
+        debug("Handling event: " + event);
+        
         switch (event.getType()) {
             case ORDER_ARRIVAL:
                 Order order = event.getData();
@@ -333,51 +342,36 @@ public class Orchestrator {
     }
 
     /**
-     * Determina si se necesita una replanificación basada en un conjunto de criterios:
-     * 1. Si ha pasado demasiado tiempo desde la última replanificación.
-     * 2. Si se ha acumulado un número significativo de nuevos pedidos.
-     * 3. Si hay pedidos pendientes que se han vuelto urgentes.
+     * Determina si es necesaria una replanificación basada en:
+     * 1. Ha transcurrido una hora desde la última replanificación
+     * 2. El factor de demanda (nuevas órdenes) supera el umbral definido
      *
      * @return true si se debe ejecutar una replanificación, false en caso contrario.
      */
-    private boolean needsReplanning() {         // Cambiar jeje
+    private boolean needsReplanning() {
         LocalDateTime currentTime = environment.getCurrentTime();
-
-        // Criterio 1: Disparador basado en el tiempo.
-        // Ha pasado más del tiempo máximo permitido sin replanificar.
-        long minutesSinceLastReplan = lastReplanningTime.getMinute() - currentTime.getMinute();
-        if (minutesSinceLastReplan >= MAX_TIME_WITHOUT_REPLAN_MINUTES) {
-            return true;
-        }
-
-        // Obtener la lista de pedidos pendientes (no entregados) para los siguientes criterios.
-        List<Order> pendingOrders = environment.getPendingOrders();
-        if (pendingOrders.isEmpty()) {
-            return false; // No hay nada que planificar.
-        }
-
-        // Criterio 2: Disparador basado en la densidad/cantidad de nuevos pedidos.
-        // Contamos cuántos pedidos han llegado DESPUÉS de la última replanificación.
-        long newOrdersCount = pendingOrders.stream()
+        
+        // Calculamos minutos desde la última replanificación
+        long minutesSinceLastReplan = java.time.Duration.between(lastReplanningTime, currentTime).toMinutes();
+        debug("Minutos desde última replanificación: " + minutesSinceLastReplan);
+        
+        // Verificamos si ha pasado el tiempo de intervalo
+        if (minutesSinceLastReplan >= REPLAN_INTERVAL_MINUTES) {
+            // Contamos nuevas órdenes desde la última replanificación
+            List<Order> pendingOrders = environment.getPendingOrders();
+            long newOrdersCount = pendingOrders.stream()
                 .filter(order -> order.getArriveTime().isAfter(lastReplanningTime))
                 .count();
-
-        if (newOrdersCount >= REPLAN_ON_NEW_ORDERS_THRESHOLD) {
-            return true;
+            
+            debug("Órdenes nuevas: " + newOrdersCount + "/" + DEMAND_FACTOR_THRESHOLD);
+            
+            // Replanificamos si hay suficiente demanda
+            if (newOrdersCount >= DEMAND_FACTOR_THRESHOLD) {
+                System.out.println("Replanificando: " + newOrdersCount + " nuevas órdenes desde última planificación");
+                return true;
+            }
         }
-
-        // Criterio 3: Disparador basado en la urgencia de los pedidos.
-        // Verificamos si hay algún pedido pendiente cuya ventana de entrega esté por vencer pronto.
-        LocalDateTime urgencyThreshold = currentTime.plusMinutes(URGENCY_WINDOW_MINUTES);
-        boolean hasUrgentOrder = pendingOrders.stream()
-                .anyMatch(order -> order.getDueTime().isBefore(urgencyThreshold));
-
-        if (hasUrgentOrder) {
-            System.out.println("Reason for replan: An urgent order is approaching its deadline.");
-            return true;
-        }
-
-        // Si no se cumple ningún criterio, no es necesario replanificar.
+        
         return false;
     }
 
@@ -388,6 +382,7 @@ public class Orchestrator {
     private void processSolution(Solution solution) {
         // Clear existing simulation events
         simulationEventsQueue.clear();
+        debug("Procesando solución con " + solution.getRoutes().size() + " rutas");
         
         // Process each route in the solution
         for (Route route : solution.getRoutes()) {

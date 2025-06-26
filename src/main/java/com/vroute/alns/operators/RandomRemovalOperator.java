@@ -80,7 +80,7 @@ public class RandomRemovalOperator extends AbstractOperator implements DestroyOp
             }
             
             // Create a new route with the remaining stops
-            Route newRoute = new Route(route.getId(), route.getVehicle(), stops);
+            Route newRoute = new Route(route.getVehicle(), stops, route.getStartTime());
             routes.set(routeIndex, newRoute);
         }
         

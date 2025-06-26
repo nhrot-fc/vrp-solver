@@ -1,6 +1,7 @@
 package com.vroute.models;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -70,22 +71,9 @@ public class Blockage {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Blockage [");
-        sb.append(startTime.toString());
-        sb.append(" - ");
-        sb.append(endTime.toString());
-        sb.append("] Points: ");
-
-        for (int i = 0; i < lines.size(); i++) {
-            Position p = lines.get(i);
-            sb.append("(").append(p.getX()).append(",").append(p.getY()).append(")");
-
-            if (i < lines.size() - 1) {
-                sb.append(" - ");
-            }
-        }
-
-        return sb.toString();
+        return String.format("🚧 [%s - %s] %d points", 
+            startTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)),
+            endTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)), 
+            blockagePoints.size());
     }
 }

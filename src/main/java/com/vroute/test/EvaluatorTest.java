@@ -15,7 +15,100 @@ import static com.vroute.test.TestFramework.Assertions.*;
  * Suite de pruebas para el evaluador de soluciones usando el mini framework de
  * testing
  */
-public class EvaluatorTestSuite {
+public class EvaluatorTest {
+
+    // Base environment for all tests
+    private static Environment baseEnvironment;
+    
+    // Standard vehicles for testing
+    private static Vehicle vehicleTB;
+    private static Vehicle vehicleTC;
+    
+    // Current simulation time
+    private static LocalDateTime currentTime;
+    
+    // Main depot
+    private static Depot mainDepot;
+    
+    // Initialize the base testing environment
+    static {
+        initializeBaseEnvironment();
+    }
+    
+    /**
+     * Creates the base environment with vehicles, depots, and no blockages
+     */
+    private static void initializeBaseEnvironment() {
+        currentTime = LocalDateTime.now();
+        
+        // Create main depot
+        mainDepot = new Depot("MAIN", new Position(0, 0), 1000, true, true);
+        
+        // Create auxiliary depots
+        List<Depot> auxDepots = new ArrayList<>();
+        auxDepots.add(new Depot("AUX1", new Position(50, 50), 500, true, false));
+        
+        // Create standard vehicles with full fuel and GLP
+        vehicleTB = new Vehicle("V-TB", VehicleType.TB, new Position(0, 0));
+        vehicleTB.refill(vehicleTB.getGlpCapacityM3());
+        vehicleTB.setCurrentFuelGal(vehicleTB.getFuelCapacityGal());
+        
+        vehicleTC = new Vehicle("V-TC", VehicleType.TC, new Position(0, 0));
+        vehicleTC.refill(vehicleTC.getGlpCapacityM3());
+        vehicleTC.setCurrentFuelGal(vehicleTC.getFuelCapacityGal());
+        
+        // Add vehicles to list
+        List<Vehicle> vehicles = new ArrayList<>();
+        vehicles.add(vehicleTB);
+        vehicles.add(vehicleTC);
+        
+        // Create the environment
+        baseEnvironment = new Environment(vehicles, mainDepot, auxDepots, currentTime);
+    }
+    
+    /**
+     * Creates a deep clone of the base environment for each test to use
+     */
+    private static Environment cloneBaseEnvironment() {
+        // Create new lists to prevent shared references
+        List<Vehicle> vehicles = new ArrayList<>();
+        vehicles.add(vehicleTB.clone());
+        vehicles.add(vehicleTC.clone());
+        
+        List<Depot> auxDepots = new ArrayList<>();
+        for (Depot depot : baseEnvironment.getAuxDepots()) {
+            auxDepots.add(new Depot(
+                depot.getId(),
+                new Position(depot.getPosition().getX(), depot.getPosition().getY()),
+                depot.getGlpCapacityM3(),
+                depot.canRefuel(),
+                depot.isMainDepot()
+            ));
+        }
+        
+        Depot clonedMainDepot = new Depot(
+            mainDepot.getId(),
+            new Position(mainDepot.getPosition().getX(), mainDepot.getPosition().getY()),
+            mainDepot.getGlpCapacityM3(),
+            mainDepot.canRefuel(),
+            mainDepot.isMainDepot()
+        );
+        
+        return new Environment(vehicles, clonedMainDepot, auxDepots, currentTime);
+    }
+
+    /**
+     * Crea un pedido para pruebas
+     */
+    private static Order createTestOrder(String id, Position position, int glpRequest, LocalDateTime dueTime) {
+        LocalDateTime arriveTime = currentTime.minusMinutes(30); // 30 minutos atrás
+        return new Order(
+                id,
+                arriveTime,
+                dueTime,
+                glpRequest,
+                position);
+    }
 
     public static TestFramework.TestSuite createSuite() {
         TestFramework.TestSuite suite = new TestFramework.TestSuite("Evaluator");
@@ -48,35 +141,33 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo con suficiente combustible y GLP
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.refill(vehicle.getGlpCapacityM3());
-            vehicle.setCurrentFuelGal(100); // Asegurar suficiente combustible
-
-            // Crear un pedido
-            Order order = createTestOrder("O1", new Position(10, 0), 10, LocalDateTime.now().plusHours(2));
-
-            // Crear una ruta con un solo pedido
+            // Get a vehicle from the environment
+            Vehicle vehicle = env.getVehicles().get(0).clone();
+            
+            // Create a test order
+            Order order = createTestOrder("O1", new Position(10, 0), 10, currentTime.plusHours(2));
+            
+            // Create a route with one order
             List<RouteStop> stops = new ArrayList<>();
             stops.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    LocalDateTime.now().plusHours(1),
+                    currentTime.plusHours(1),
                     order.getGlpRequestM3()));
 
-            Route route = new Route("R1", vehicle, stops);
+            Route route = new Route(vehicle, stops, currentTime);
 
-            // Crear un mapa de pedidos
+            // Create order map
             Map<String, Order> orders = new HashMap<>();
             orders.put(order.getId(), order);
 
-            // Evaluar la ruta directamente
+            // Evaluate the route
             double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
 
-            // Aserciones
+            // Assertions
             assertFalse(Double.isInfinite(cost), "El costo no debe ser infinito");
             assertTrue(cost > 0, "El costo debe ser positivo");
         }
@@ -98,34 +189,34 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo con poco combustible
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
+            // Get a vehicle and set fuel to 0
+            Vehicle vehicle = env.getVehicles().get(0).clone();
             vehicle.setCurrentFuelGal(0);
 
-            // Crear un pedido lejano
-            Order order = createTestOrder("O1", new Position(50, 0), 20, LocalDateTime.now().plusHours(2));
+            // Create a distant order
+            Order order = createTestOrder("O1", new Position(50, 0), 20, currentTime.plusHours(2));
 
-            // Crear una ruta con un solo pedido
+            // Create a route with one order
             List<RouteStop> stops = new ArrayList<>();
             stops.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    LocalDateTime.now().plusHours(1),
+                    currentTime.plusHours(1),
                     order.getGlpRequestM3()));
 
-            Route route = new Route("R2", vehicle, stops);
+            Route route = new Route(vehicle, stops, currentTime);
 
-            // Crear un mapa de pedidos
+            // Create order map
             Map<String, Order> orders = new HashMap<>();
             orders.put(order.getId(), order);
 
-            // Evaluar la ruta directamente
+            // Evaluate the route
             double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
 
-            // Aserciones
+            // Assertions
             assertTrue(Double.isInfinite(cost), "El costo debe ser infinito por falta de combustible");
             assertEquals(Double.NEGATIVE_INFINITY, cost, "El costo debe ser específicamente NEGATIVE_INFINITY");
         }
@@ -147,34 +238,34 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo con poco GLP pero suficiente combustible
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.setCurrentFuelGal(100); // Asegurar que tiene suficiente combustible
+            // Get a vehicle and set GLP to 0
+            Vehicle vehicle = env.getVehicles().get(0).clone();
+            vehicle.dispenseGlp(vehicle.getCurrentGlpM3()); // Empty the GLP
 
-            // Crear un pedido con alta demanda de GLP
-            Order order = createTestOrder("O1", new Position(10, 0), 20, LocalDateTime.now().plusHours(2));
+            // Create an order requiring GLP
+            Order order = createTestOrder("O1", new Position(10, 0), 20, currentTime.plusHours(2));
 
-            // Crear una ruta con un solo pedido
+            // Create a route with one order
             List<RouteStop> stops = new ArrayList<>();
             stops.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    LocalDateTime.now().plusHours(1),
+                    currentTime.plusHours(1),
                     order.getGlpRequestM3()));
 
-            Route route = new Route("R3", vehicle, stops);
+            Route route = new Route(vehicle, stops, currentTime);
 
-            // Crear un mapa de pedidos
+            // Create order map
             Map<String, Order> orders = new HashMap<>();
             orders.put(order.getId(), order);
 
-            // Evaluar la ruta directamente
+            // Evaluate the route
             double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
 
-            // Aserciones
+            // Assertions
             assertTrue(Double.isInfinite(cost), "El costo debe ser infinito por falta de GLP");
             assertEquals(Double.NEGATIVE_INFINITY, cost, "El costo debe ser específicamente NEGATIVE_INFINITY");
         }
@@ -198,44 +289,42 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo con capacidad limitada de GLP
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.refill(vehicle.getGlpCapacityM3());
-            vehicle.setCurrentFuelGal(100); // Asegurar suficiente combustible
+            // Get a vehicle
+            Vehicle vehicle = env.getVehicles().get(0).clone();
 
-            // Crear un pedido
-            Order order = createTestOrder("O1", new Position(10, 0), 10, LocalDateTime.now().plusHours(2));
+            // Create an order
+            Order order = createTestOrder("O1", new Position(10, 0), 10, currentTime.plusHours(2));
 
-            // Crear un depósito que recarga demasiado GLP
-            Depot depot = new Depot("D1", new Position(20, 0), 100, true, false);
+            // Get the auxiliary depot
+            Depot depot = env.getAuxDepots().get(0);
 
-            // Crear una ruta con una parada en el depósito y luego al pedido
+            // Create a route with a depot stop and then the order
             List<RouteStop> stops = new ArrayList<>();
             stops.add(new DepotStop(
                     depot,
-                    LocalDateTime.now().plusMinutes(30),
-                    80 // Intenta recargar más GLP del que puede llevar
+                    currentTime.plusMinutes(30),
+                    vehicle.getGlpCapacityM3() * 2 // Try to recharge twice the capacity
             ));
 
             stops.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    LocalDateTime.now().plusHours(1),
+                    currentTime.plusHours(1),
                     order.getGlpRequestM3()));
 
-            Route route = new Route("R4", vehicle, stops);
+            Route route = new Route(vehicle, stops, currentTime);
 
-            // Crear un mapa de pedidos
+            // Create order map
             Map<String, Order> orders = new HashMap<>();
             orders.put(order.getId(), order);
 
-            // Evaluar la ruta directamente
+            // Evaluate the route
             double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
 
-            // Aserciones
+            // Assertions
             assertTrue(Double.isInfinite(cost), "El costo debe ser infinito por exceder capacidad de GLP");
             assertEquals(Double.NEGATIVE_INFINITY, cost, "El costo debe ser específicamente NEGATIVE_INFINITY");
         }
@@ -257,48 +346,44 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo con suficiente combustible
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.refill(vehicle.getGlpCapacityM3());
-            vehicle.setCurrentFuelGal(100); // Asegurar suficiente combustible
+            // Get a vehicle
+            Vehicle vehicle = env.getVehicles().get(0).clone();
 
-            // Crear un pedido con fecha límite próxima
-            Order order = createTestOrder("O1", new Position(10, 0), 10, LocalDateTime.now().plusMinutes(30));
+            // Create an order with soon deadline
+            Order order = createTestOrder("O1", new Position(10, 0), 10, currentTime.plusMinutes(30));
 
-            // Crear una ruta con un pedido que se entrega tarde
+            // Create a route with late delivery
             List<RouteStop> stops = new ArrayList<>();
             stops.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    LocalDateTime.now().plusHours(2), // 2 horas después, será tarde
+                    currentTime.plusHours(2), // 2 hours late
                     order.getGlpRequestM3()));
 
-            Route route = new Route("R5", vehicle, stops);
+            Route route = new Route(vehicle, stops, currentTime);
 
-            // Crear un mapa de pedidos
-            Map<String, Order> orders = new HashMap<>();
-            orders.put(order.getId(), order);
-
-            // Evaluar la ruta directamente con entrega tardía
-            double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
-
-            // Ahora crear una ruta con entrega a tiempo para comparar
+            // Create an on-time route for comparison
             List<RouteStop> stopsOnTime = new ArrayList<>();
             stopsOnTime.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    order.getDueTime().minusMinutes(5), // Justo a tiempo
+                    order.getDueTime().minusMinutes(5), // Just in time
                     order.getGlpRequestM3()));
             
-            Route routeOnTime = new Route("R5-OnTime", vehicle.clone(), stopsOnTime);
+            Route routeOnTime = new Route(vehicle.clone(), stopsOnTime, currentTime);
             
-            // Evaluar la ruta con entrega a tiempo
+            // Create order map
+            Map<String, Order> orders = new HashMap<>();
+            orders.put(order.getId(), order);
+
+            // Evaluate both routes
+            double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
             double costOnTime = Evaluator.evaluateRoute(env, routeOnTime, orders, new HashMap<>());
             
-            // Aserciones
+            // Assertions
             assertFalse(Double.isInfinite(cost), "El costo no debe ser infinito aunque la entrega sea tardía");
             assertTrue(cost > 0, "El costo debe ser positivo");
             assertTrue(cost > costOnTime, "El costo de entrega tardía debe ser mayor que el de entrega a tiempo");
@@ -307,11 +392,6 @@ public class EvaluatorTestSuite {
 
     /**
      * Prueba una solución más compleja para diagnosticar problemas de algoritmos
-     * 
-     * GIVEN: Una solución compleja con múltiples rutas y pedidos
-     * PROCESS: Se evalúa la solución completa y se analiza cada ruta individual en
-     * caso de problemas
-     * AFTER: Se identifican las rutas problemáticas y sus causas específicas
      */
     private static class ComplexSolutionTest extends TestFramework.AbstractTest {
 
@@ -321,49 +401,60 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // En lugar de usar una solución compleja predefinida, crear una solución muy simple
-            // que sabemos que es válida
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Get both vehicles
+            Vehicle vehicle1 = env.getVehicles().get(0).clone();
+            Vehicle vehicle2 = env.getVehicles().get(1).clone();
             
-            // Crear un vehículo con suficiente combustible y GLP
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.refill(vehicle.getGlpCapacityM3());
-            vehicle.setCurrentFuelGal(100);
-            
-            // Crear un pedido cercano
-            Order order = createTestOrder("O1", new Position(5, 0), 5, LocalDateTime.now().plusHours(2));
-            
-            // Crear una ruta con un solo pedido
-            List<RouteStop> stops = new ArrayList<>();
-            stops.add(new OrderStop(
-                    order.getId(),
-                    order.getPosition(),
-                    LocalDateTime.now().plusHours(1),
-                    order.getGlpRequestM3()));
-            
-            Route route = new Route("R1", vehicle, stops);
-            
-            // Crear el mapa de pedidos
+            // Create multiple orders in different locations
             Map<String, Order> orders = new HashMap<>();
-            orders.put(order.getId(), order);
             
-            // Crear la solución
+            Order order1 = createTestOrder("O1", new Position(5, 5), 5, currentTime.plusHours(2));
+            Order order2 = createTestOrder("O2", new Position(10, 10), 8, currentTime.plusHours(3));
+            Order order3 = createTestOrder("O3", new Position(15, 0), 12, currentTime.plusHours(4));
+            Order order4 = createTestOrder("O4", new Position(0, 15), 7, currentTime.plusHours(5));
+            
+            orders.put(order1.getId(), order1);
+            orders.put(order2.getId(), order2);
+            orders.put(order3.getId(), order3);
+            orders.put(order4.getId(), order4);
+            
+            // Create routes for the vehicles
+            // Vehicle 1 will serve orders 1 and 3
+            List<RouteStop> stops1 = new ArrayList<>();
+            stops1.add(new OrderStop(order1.getId(), order1.getPosition(), 
+                    currentTime.plusHours(1), order1.getGlpRequestM3()));
+            stops1.add(new OrderStop(order3.getId(), order3.getPosition(), 
+                    currentTime.plusHours(3), order3.getGlpRequestM3()));
+            Route route1 = new Route(vehicle1, stops1, currentTime);
+            
+            // Vehicle 2 will serve orders 2 and 4
+            List<RouteStop> stops2 = new ArrayList<>();
+            stops2.add(new OrderStop(order2.getId(), order2.getPosition(), 
+                    currentTime.plusHours(2), order2.getGlpRequestM3()));
+            stops2.add(new OrderStop(order4.getId(), order4.getPosition(), 
+                    currentTime.plusHours(4), order4.getGlpRequestM3()));
+            Route route2 = new Route(vehicle2, stops2, currentTime);
+            
+            // Create solution with both routes
             List<Route> routes = new ArrayList<>();
-            routes.add(route);
+            routes.add(route1);
+            routes.add(route2);
             Solution solution = new Solution(orders, routes);
             
-            // Evaluar la ruta directamente
-            double routeCost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
-            
-            // También evaluar la solución completa
+            // Evaluate the solution
             double solutionCost = Evaluator.evaluateSolution(env, solution);
             
-            // Aserciones
-            assertFalse(Double.isInfinite(routeCost), "El costo de la ruta no debe ser infinito");
+            // Also evaluate each route separately
+            double route1Cost = Evaluator.evaluateRoute(env, route1, orders, new HashMap<>());
+            double route2Cost = Evaluator.evaluateRoute(env, route2, orders, new HashMap<>());
+            
+            // Assertions
+            assertFalse(Double.isInfinite(route1Cost), "El costo de la ruta 1 no debe ser infinito");
+            assertFalse(Double.isInfinite(route2Cost), "El costo de la ruta 2 no debe ser infinito");
             assertFalse(Double.isInfinite(solutionCost), "El costo de la solución no debe ser infinito");
-            assertTrue(routeCost > 0, "El costo debe ser positivo");
             assertTrue(solutionCost > 0, "El costo de la solución debe ser positivo");
         }
     }
@@ -371,12 +462,6 @@ public class EvaluatorTestSuite {
     /**
      * Test para detectar la discrepancia entre la capacidad real y la del tipo de
      * vehículo
-     * 
-     * GIVEN: Un vehículo con capacidad GLP definida por su tipo
-     * PROCESS: Se modifica artificialmente el GLP actual del vehículo y se evalúa
-     * una ruta
-     * AFTER: Se verifica si la evaluación detecta correctamente cuando el GLP
-     * supera la capacidad máxima
      */
     private static class TypeCapacityVsActualCapacityTest extends TestFramework.AbstractTest {
 
@@ -386,57 +471,56 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo tipo TB que tiene capacidad 15 según el enum
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.setCurrentFuelGal(100); // Asegurar suficiente combustible
+            // Get a vehicle
+            Vehicle vehicle = env.getVehicles().get(0).clone();
 
-            // Verificar que la capacidad y tipo son consistentes
-            assertEquals(VehicleType.TB.getCapacityM3(), vehicle.getGlpCapacityM3(),
+            // Verify that capacity and type are consistent
+            assertEquals(vehicle.getType().getCapacityM3(), vehicle.getGlpCapacityM3(),
                     "La capacidad GLP del vehículo debe coincidir con la del tipo");
 
-            // Modificar el GLP del vehículo artificialmente
+            // Modify the vehicle's GLP artificially
             try {
                 java.lang.reflect.Field currentGlpField = Vehicle.class.getDeclaredField("currentGlpM3");
                 currentGlpField.setAccessible(true);
 
-                int newGlpValue = 100; // Un valor muy superior a la capacidad
+                int newGlpValue = 100; // A value much higher than capacity
                 currentGlpField.set(vehicle, newGlpValue);
 
                 assertEquals(newGlpValue, vehicle.getCurrentGlpM3(),
                         "El GLP actual debe haberse modificado al valor esperado");
 
-                // Verificar que el GLP actual excede la capacidad
+                // Verify that current GLP exceeds capacity
                 assertTrue(vehicle.getCurrentGlpM3() > vehicle.getGlpCapacityM3(),
                         "El GLP actual debe exceder la capacidad máxima");
 
-                // Crear una ruta simple para este vehículo
-                Order order = createTestOrder("O1", new Position(10, 0), 20, LocalDateTime.now().plusHours(2));
+                // Create a simple route for this vehicle
+                Order order = createTestOrder("O1", new Position(10, 0), 20, currentTime.plusHours(2));
 
                 List<RouteStop> stops = new ArrayList<>();
                 stops.add(new OrderStop(
                         order.getId(),
                         order.getPosition(),
-                        LocalDateTime.now().plusHours(1),
+                        currentTime.plusHours(1),
                         order.getGlpRequestM3()));
 
-                Route route = new Route("R-Test", vehicle, stops);
+                Route route = new Route(vehicle, stops, currentTime);
 
-                // Crear un mapa de pedidos
+                // Create order map
                 Map<String, Order> orders = new HashMap<>();
                 orders.put(order.getId(), order);
 
-                // Evaluar la ruta directamente (debería detectar que el GLP excede la capacidad)
+                // Evaluate the route
                 double routeCost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
 
-                // Verificar si el evaluador detecta el problema de capacidad o simplemente lo permite
+                // Check if the evaluator detects the capacity problem
                 if (Double.isInfinite(routeCost)) {
-                    // Si lo detecta como error (comportamiento ideal)
+                    // If detected as error (ideal behavior)
                     assertTrue(true, "El evaluador correctamente detecta que el GLP excede la capacidad máxima");
                 } else {
-                    // Si lo permite (también aceptable en algunos casos)
+                    // If allowed (also acceptable in some cases)
                     System.out.println("Advertencia: El evaluador no detecta la discrepancia de capacidad GLP");
                 }
             } catch (Exception e) {
@@ -447,12 +531,6 @@ public class EvaluatorTestSuite {
 
     /**
      * Test de una solución válida respetando las capacidades
-     * 
-     * GIVEN: Un vehículo con GLP exactamente a su capacidad máxima y un pedido con
-     * demanda viable
-     * PROCESS: Se crea una ruta con un pedido que demanda menos GLP del que tiene
-     * el vehículo
-     * AFTER: La solución debe ser válida y tener un costo finito
      */
     private static class ValidSolutionWithinCapacityTest extends TestFramework.AbstractTest {
 
@@ -462,76 +540,48 @@ public class EvaluatorTestSuite {
 
         @Override
         protected void runTest() throws Throwable {
-            // Crear un entorno para la evaluación
-            Environment env = createTestEnvironment();
+            // Clone base environment for this test
+            Environment env = cloneBaseEnvironment();
             
-            // Crear un vehículo con GLP dentro de su capacidad y suficiente combustible
-            Vehicle vehicle = new Vehicle("V1", VehicleType.TB, new Position(0, 0));
-            vehicle.setCurrentFuelGal(100); // Asegurar suficiente combustible
+            // Get a vehicle
+            Vehicle vehicle = env.getVehicles().get(0).clone();
             
-            // Establecer GLP al máximo de su capacidad
+            // Set GLP to maximum capacity
             int glpCapacity = vehicle.getGlpCapacityM3();
             vehicle.refill(glpCapacity);
 
-            // Verificar que el GLP actual es exactamente igual a la capacidad
+            // Verify that current GLP is exactly equal to capacity
             assertEquals(glpCapacity, vehicle.getCurrentGlpM3(),
                     "El GLP actual debe ser igual a la capacidad máxima");
 
-            // Crear un pedido con demanda de GLP dentro de la capacidad del vehículo
-            int glpDemand = glpCapacity / 3; // Un tercio de la capacidad
-            Order order = createTestOrder("O1", new Position(10, 0), glpDemand, LocalDateTime.now().plusHours(2));
+            // Create an order with GLP demand within vehicle capacity
+            int glpDemand = glpCapacity / 3; // One third of capacity
+            Order order = createTestOrder("O1", new Position(10, 0), glpDemand, currentTime.plusHours(2));
 
-            // Verificar que la demanda es menor que la capacidad
+            // Verify that demand is less than capacity
             assertTrue(order.getGlpRequestM3() <= vehicle.getCurrentGlpM3(),
                     "La demanda de GLP debe ser menor o igual al GLP disponible");
 
-            // Crear una ruta para servir al pedido
+            // Create a route to serve the order
             List<RouteStop> stops = new ArrayList<>();
             stops.add(new OrderStop(
                     order.getId(),
                     order.getPosition(),
-                    LocalDateTime.now().plusHours(1),
+                    currentTime.plusHours(1),
                     order.getGlpRequestM3()));
 
-            Route route = new Route("R-Valid", vehicle, stops);
+            Route route = new Route(vehicle, stops, currentTime);
 
-            // Crear un mapa de pedidos
+            // Create order map
             Map<String, Order> orders = new HashMap<>();
             orders.put(order.getId(), order);
 
-            // Evaluar la ruta directamente
+            // Evaluate the route
             double cost = Evaluator.evaluateRoute(env, route, orders, new HashMap<>());
 
-            // Aserciones
+            // Assertions
             assertFalse(Double.isInfinite(cost), "El costo no debe ser infinito");
             assertTrue(cost > 0, "El costo debe ser positivo");
         }
-    }
-
-    // Métodos auxiliares (reutilizados del TestEvaluator original)
-
-    /**
-     * Crea un pedido para pruebas
-     */
-    private static Order createTestOrder(String id, Position position, int glpRequest, LocalDateTime dueTime) {
-        LocalDateTime arriveTime = LocalDateTime.now().minusMinutes(30); // 30 minutos atrás
-        return new Order(
-                id,
-                arriveTime,
-                dueTime,
-                glpRequest,
-                position);
-    }
-    
-    /**
-     * Crea un entorno de prueba simple con un depósito principal
-     */
-    private static Environment createTestEnvironment() {
-        List<Vehicle> vehicles = new ArrayList<>();
-        Depot mainDepot = new Depot("MAIN", new Position(0, 0), 1000, true, true);
-        List<Depot> auxDepots = new ArrayList<>();
-        LocalDateTime currentTime = LocalDateTime.now();
-        
-        return new Environment(vehicles, mainDepot, auxDepots, currentTime);
     }
 }

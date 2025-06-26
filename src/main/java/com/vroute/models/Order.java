@@ -2,6 +2,7 @@ package com.vroute.models;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public class Order {
@@ -97,7 +98,7 @@ public class Order {
         return String.format("📦 %s %s [🕒 %s] [GLP: %d/%d m³] %s",
                 id,
                 status,
-                dueTime.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")),
+                dueTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)),
                 remainingGlpM3,
                 glpRequestM3,
                 position);

@@ -1,301 +1,126 @@
 package com.vroute.solution;
 
-import com.vroute.models.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+import com.vroute.models.Environment;
+import com.vroute.models.Order;
+import com.vroute.models.Position;
+import com.vroute.models.Vehicle;
 import com.vroute.pathfinding.PathFinder;
 import com.vroute.pathfinding.PathResult;
+import com.vroute.taboo.RouteFixer;
 
-import java.time.LocalDateTime;
-import java.util.*;
-
-/**
- * Sequential Insertion Heuristic (SIH) implementation for the V-Route problem.
- * This heuristic builds routes one by one, inserting orders based on a cost
- * function that considers distance, time constraints, and vehicle limitations.
- */
 public class SIHSolver implements Solver {
-    private static final int SERVICE_TIME_MINUTES = Constants.GLP_SERVE_DURATION_MINUTES;
-    private static final double DEPOT_VISIT_THRESHOLD = 0.5; // Visit depot when GLP falls below 50%
-    private static final int MAX_ORDER_CANDIDATES = 3; // Number of order candidates to consider at each step
-    private static final int REFUELING_TIME_MINUTES = 15; // Time for refueling at depot
+
+    private static final int[] GLP_DELIVERY_OPTIONS = { 5, 10, 15, 20, 25 };
+    private final Random random = new Random();
 
     @Override
     public Solution solve(Environment environment) {
-        // Clone environment to avoid modifying the original one
-        Environment env = environment.clone();
-
-        // Get all pending orders
-        List<Order> pendingOrders = new ArrayList<>(env.getPendingOrders());
-
-        // If no pending orders, return empty solution
-        if (pendingOrders.isEmpty()) {
-            return new Solution(new HashMap<>(), new ArrayList<>());
+        if (environment == null) {
+            return null;
         }
 
-        // Sort orders by due time (ascending)
-        pendingOrders.sort(Comparator.comparing(Order::getDueTime));
+        // Get all pending orders and sort by deadline
+        List<Order> pendingOrders = new ArrayList<>(environment.getPendingOrders());
+        Collections.sort(pendingOrders, Comparator.comparing(Order::getDueTime));
 
         // Get available vehicles
-        List<Vehicle> availableVehicles = new ArrayList<>(env.getAvailableVehicles());
-
-        // If no available vehicles, return empty solution
+        List<Vehicle> availableVehicles = new ArrayList<>(environment.getAvailableVehicles());
         if (availableVehicles.isEmpty()) {
-            Map<String, Order> allOrders = new HashMap<>();
-            for (Order order : pendingOrders) {
-                allOrders.put(order.getId(), order);
-            }
-            return new Solution(allOrders, new ArrayList<>());
+            return null; // No vehicles available
         }
 
-        // Track orders by ID for solution construction
-        Map<String, Order> allOrders = new HashMap<>();
-        for (Order order : pendingOrders) {
-            allOrders.put(order.getId(), order);
-        }
+        // Initialize maps and lists to build our solution
+        Map<String, Order> ordersMap = new HashMap<>();
+        Map<Vehicle, List<OrderStop>> vehicleToOrderStopsMap = new HashMap<>();
+        Map<String, Position> lastPositionMap = new HashMap<>();
 
-        // Component 1: Cost-based vehicle selection
-        // Sort vehicles by a combination of capacity and estimated fuel efficiency
-        availableVehicles.sort((v1, v2) -> {
-            // Calculate an estimated fuel consumption rate based on vehicle weight and
-            // capacity
-            double weightV1 = v1.getType().getTareWeightTon();
-            double weightV2 = v2.getType().getTareWeightTon();
-            double fuelRateV1 = weightV1 / Constants.CONSUMPTION_FACTOR;
-            double fuelRateV2 = weightV2 / Constants.CONSUMPTION_FACTOR;
-
-            // Score based on capacity and fuel efficiency
-            double score1 = v1.getGlpCapacityM3() * 2.0 - fuelRateV1 * 100.0;
-            double score2 = v2.getGlpCapacityM3() * 2.0 - fuelRateV2 * 100.0;
-
-            return Double.compare(score2, score1); // Higher score first
-        });
-
-        // List to store routes for all vehicles
-        List<Route> routes = new ArrayList<>();
-
-        // Process each vehicle
+        // Initialize each vehicle's order stops list and position map
         for (Vehicle vehicle : availableVehicles) {
-            // If no more pending orders, break
-            if (pendingOrders.isEmpty())
-                break;
+            vehicleToOrderStopsMap.put(vehicle, new ArrayList<>());
+            lastPositionMap.put(vehicle.getId(), vehicle.getCurrentPosition());
+        }
 
-            // Create a route for this vehicle
-            String routeId = "R-" + vehicle.getId();
-            List<RouteStop> stops = new ArrayList<>();
+        // Process each order
+        for (Order order : pendingOrders) {
+            ordersMap.put(order.getId(), order);
 
-            // Clone vehicle to track its state
-            Vehicle currentVehicle = vehicle.clone();
-            Position currentPosition = currentVehicle.getCurrentPosition();
-            LocalDateTime currentTime = env.getCurrentTime();
+            // Determine how much GLP to deliver (randomly pick from options, but limited by order's remaining)
+            int glpToDeliver = Math.min(order.getRemainingGlpM3(),
+                    GLP_DELIVERY_OPTIONS[random.nextInt(GLP_DELIVERY_OPTIONS.length)]);
 
-            // Validate that vehicle has fuel and GLP
-            if (currentVehicle.getCurrentFuelGal() <= 0 || currentVehicle.getCurrentGlpM3() <= 0) {
-                continue; // Skip vehicle if it has no fuel or GLP
-            }
+            // Find the best vehicle based on distance to the order
+            Vehicle bestVehicle = null;
+            double shortestDistance = Double.MAX_VALUE;
 
-            // Process orders for this vehicle
-            while (!pendingOrders.isEmpty()) {
-                // Check if depot visit is needed before continuing
-                if (currentVehicle.getCurrentGlpM3() < currentVehicle.getGlpCapacityM3() * DEPOT_VISIT_THRESHOLD) {
-                    DepotStop depotStop = visitBestDepot(env, currentVehicle, currentPosition, currentTime);
-                    if (depotStop != null) {
-                        stops.add(depotStop);
-                        currentPosition = depotStop.getPosition();
-                        currentTime = depotStop.getArrivalTime().plusMinutes(REFUELING_TIME_MINUTES);
+            for (Vehicle vehicle : availableVehicles) {
+                // Verificar si el vehículo puede transportar esta cantidad de GLP (basado en capacidad máxima)
+                if (glpToDeliver > vehicle.getGlpCapacityM3()) {
+                    continue; // El vehículo no tiene suficiente capacidad máxima para esta entrega
+                }
+                
+                Position lastPosition = lastPositionMap.get(vehicle.getId());
+                PathResult pathResult = PathFinder.findPath(
+                        environment,
+                        lastPosition,
+                        order.getPosition(),
+                        environment.getCurrentTime());
 
-                        // Update vehicle state with depot refill
-                        int glpRefilled = Math.min(
-                                depotStop.getGlpRecharge(),
-                                currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3());
-                        currentVehicle.refill(glpRefilled);
-
-                        // Refuel if depot allows it
-                        Depot depot = findDepotById(env, depotStop.getEntityID());
-                        if (depot != null && depot.canRefuel()) {
-                            currentVehicle.refuel();
-                        }
-                    }
+                // Skip vehicles that can't reach the order
+                if (pathResult == null) {
+                    continue;
                 }
 
-                // Component 2: Cost-based order selection
-                // Find the best order to insert based on cost
-                Order bestOrder = null;
-                double bestInsertionCost = Double.MAX_VALUE;
-                PathResult bestPathToOrder = null;
-
-                // Consider only a subset of candidates to allow for diversity
-                int candidatesToConsider = Math.min(MAX_ORDER_CANDIDATES, pendingOrders.size());
-                List<Order> candidates = new ArrayList<>(pendingOrders.subList(0, candidatesToConsider));
-
-                for (Order candidateOrder : candidates) {
-                    if (candidateOrder.isDelivered())
-                        continue;
-
-                    // Calculate path to order
-                    PathResult pathToOrder = PathFinder.findPath(env, currentPosition,
-                            candidateOrder.getPosition(), currentTime);
-
-                    if (!pathToOrder.isPathFound())
-                        continue;
-
-                    // Calculate fuel needed
-                    double distanceToOrder = pathToOrder.getTotalDistance();
-                    double fuelNeeded = currentVehicle.calculateFuelNeeded(distanceToOrder);
-
-                    // Skip if not enough fuel
-                    if (fuelNeeded > currentVehicle.getCurrentFuelGal())
-                        continue;
-
-                    // Calculate deliverable GLP
-                    int deliverableGLP = Math.min(candidateOrder.getRemainingGlpM3(),
-                            currentVehicle.getCurrentGlpM3());
-                    if (deliverableGLP <= 0)
-                        continue;
-
-                    // Calculate insertion cost
-                    LocalDateTime estimatedArrival = pathToOrder.getArrivalTime();
-
-                    // Check if we can get back to the depot after this order
-                    OrderStop tempOrderStop = new OrderStop(candidateOrder.getId(),
-                            candidateOrder.getPosition(), estimatedArrival, deliverableGLP);
-
-                    // Create a temporary route to evaluate cost
-                    List<RouteStop> tempStops = new ArrayList<>(stops);
-                    tempStops.add(tempOrderStop);
-
-                    // Evaluate insertion cost using Evaluator - less strict for tests
-                    double insertionCost = distanceToOrder;
-
-                    if (insertionCost != Double.NEGATIVE_INFINITY) {
-                        if (insertionCost < bestInsertionCost) {
-                            bestInsertionCost = insertionCost;
-                            bestOrder = candidateOrder;
-                            bestPathToOrder = pathToOrder;
-                        }
-                    }
-                }
-
-                // If no feasible order found, move to next vehicle
-                if (bestOrder == null)
-                    break;
-
-                // Process the best order
-                LocalDateTime estimatedArrival = bestPathToOrder.getArrivalTime();
-                double distanceToOrder = bestPathToOrder.getTotalDistance();
-
-                // Calculate deliverable GLP
-                int deliverableGLP = Math.min(bestOrder.getRemainingGlpM3(),
-                        currentVehicle.getCurrentGlpM3());
-
-                // Create order stop
-                OrderStop orderStop = new OrderStop(bestOrder.getId(), bestOrder.getPosition(),
-                        estimatedArrival, deliverableGLP);
-
-                // Update vehicle state
-                currentVehicle.setCurrentPosition(bestOrder.getPosition());
-                currentVehicle.dispenseGlp(deliverableGLP);
-                currentVehicle.consumeFuel(distanceToOrder);
-                currentTime = estimatedArrival.plusMinutes(SERVICE_TIME_MINUTES);
-
-                // Add stop to route
-                stops.add(orderStop);
-
-                // Update order
-                bestOrder.recordDelivery(deliverableGLP, vehicle.getId(), estimatedArrival);
-
-                // Remove order if it's fully delivered
-                if (bestOrder.isDelivered()) {
-                    pendingOrders.remove(bestOrder);
-                }
-
-                // If we've processed a good number of orders or running low on resources, move
-                // to next vehicle
-                if (stops.size() > 10 ||
-                        currentVehicle.getCurrentGlpM3() == 0 ||
-                        currentVehicle.getCurrentFuelGal() < 5) {
-                    break;
+                double distance = pathResult.getDistance();
+                if (distance < shortestDistance) {
+                    shortestDistance = distance;
+                    bestVehicle = vehicle;
                 }
             }
 
-            // Final return to depot if we have stops
-            if (!stops.isEmpty()) {
-                // For tests, we might skip depot return validation
-                boolean addRouteToSolution = true;
-                if (addRouteToSolution) {
-                    // Create route and add to list
-                    Route route = new Route(routeId, currentVehicle, stops);
+            // If we found a suitable vehicle, assign the order to it
+            if (bestVehicle != null) {
+                OrderStop orderStop = new OrderStop(
+                        order.getId(),
+                        order.getPosition(),
+                        environment.getCurrentTime(), // This will be corrected by RouteFixer
+                        glpToDeliver);
 
-                    // For tests, just add the route
-                    routes.add(route);
-
-                }
+                vehicleToOrderStopsMap.get(bestVehicle).add(orderStop);
+                lastPositionMap.put(bestVehicle.getId(), order.getPosition());
             }
         }
 
-        // Create solution
-        Solution solution = new Solution(allOrders, routes);
-        return solution;
-    }
+        // Create and fix routes
+        List<Route> routes = new ArrayList<>();
+        for (Vehicle vehicle : availableVehicles) {
+            List<OrderStop> orderStops = vehicleToOrderStopsMap.get(vehicle);
 
-    /**
-     * Finds the best depot to visit based on distance and refill needs
-     */
-    private DepotStop visitBestDepot(Environment env, Vehicle vehicle, Position currentPosition,
-            LocalDateTime currentTime) {
-        Depot bestDepot = null;
-        double bestDepotCost = Double.MAX_VALUE;
-        PathResult bestPathToDepot = null;
-
-        // Consider main depot and auxiliaries
-        for (Depot depot : env.getDepots()) {
-            PathResult pathToDepot = PathFinder.findPath(env, currentPosition,
-                    depot.getPosition(), currentTime);
-
-            if (!pathToDepot.isPathFound())
+            // Skip vehicles with no assigned orders
+            if (orderStops.isEmpty()) {
                 continue;
+            }
 
-            double distanceToDepot = pathToDepot.getTotalDistance();
-            double fuelToDepot = vehicle.calculateFuelNeeded(distanceToDepot);
+            // Fix the route (add depot stops as needed for GLP and fuel)
+            Route fixedRoute = RouteFixer.fixRoute(
+                    environment,
+                    orderStops,
+                    vehicle,
+                    environment.getCurrentTime());
 
-            if (fuelToDepot <= vehicle.getCurrentFuelGal()) {
-                // Evaluate cost of visiting this depot
-                double depotCost = distanceToDepot;
-
-                if (depotCost < bestDepotCost) {
-                    bestDepotCost = depotCost;
-                    bestDepot = depot;
-                    bestPathToDepot = pathToDepot;
-                }
+            if (fixedRoute != null) {
+                routes.add(fixedRoute);
             }
         }
 
-        // Visit the best depot if found
-        if (bestDepot != null && bestPathToDepot != null) {
-            LocalDateTime depotArrival = bestPathToDepot.getArrivalTime();
-
-            // How much GLP to fill (limit to vehicle capacity)
-            int glpRefillAmount = vehicle.getGlpCapacityM3() - vehicle.getCurrentGlpM3();
-
-            // Add depot stop
-            return new DepotStop(bestDepot, depotArrival, glpRefillAmount);
-        }
-
-        return null;
-    }
-
-    /**
-     * Finds a depot by ID in the environment
-     */
-    private Depot findDepotById(Environment env, String depotId) {
-        if (env.getMainDepot().getId().equals(depotId)) {
-            return env.getMainDepot();
-        }
-
-        for (Depot depot : env.getAuxDepots()) {
-            if (depot.getId().equals(depotId)) {
-                return depot;
-            }
-        }
-
-        return null;
+        // Create the solution
+        return new Solution(ordersMap, routes);
     }
 }

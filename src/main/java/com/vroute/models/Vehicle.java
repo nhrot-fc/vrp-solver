@@ -21,7 +21,7 @@ public class Vehicle {
         this.fuelCapacityGal = Constants.VEHICLE_FUEL_CAPACITY_GAL;
         this.currentPosition = currentPosition;
         this.currentGlpM3 = 0;
-        this.currentFuelGal = this.fuelCapacityGal;
+        this.currentFuelGal = 0;
         this.status = VehicleStatus.AVAILABLE;
     }
 

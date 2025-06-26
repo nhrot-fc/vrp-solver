@@ -11,13 +11,13 @@ import java.util.*;
 public class PathFinder {
     public static PathResult findPath(Environment env, Position inicio, Position fin, LocalDateTime horaSalida) {
         if (inicio == null || fin == null || horaSalida == null || env == null) {
-            return new PathResult(Collections.emptyList(), horaSalida, 0);
+            return null;
         }
         if (inicio.equals(fin)) {
-            return new PathResult(Collections.singletonList(inicio), horaSalida, 0);
+            return new PathResult(Collections.singletonList(inicio), Collections.singletonList(horaSalida), 0);
         }
         if (esBloqueado(inicio, horaSalida, env)) {
-            return new PathResult(Collections.emptyList(), horaSalida, 0);
+            return null;
         }
 
         PriorityQueue<Node> openSet = new PriorityQueue<>();
@@ -34,9 +34,16 @@ public class PathFinder {
             Node current = openSet.poll();
 
             if (current.posicion.equals(fin)) {
-                List<Position> path = construirResultado(current);
-                double totalDistance = calcularDistanciaTotal(path);
-                return new PathResult(path, current.estimatedArrivalTime, totalDistance);
+                List<Node> path = construirResultado(current);
+                int totalDistance = calcularDistancia(path);
+
+                List<Position> positions = new ArrayList<>();
+                List<LocalDateTime> arrivalTimes = new ArrayList<>();
+                for (Node node : path) {
+                    positions.add(node.posicion);
+                    arrivalTimes.add(node.estimatedArrivalTime);
+                }
+                return new PathResult(positions, arrivalTimes, totalDistance);
             }
 
             closedSet.add(current.posicion);
@@ -45,8 +52,8 @@ public class PathFinder {
                 int newX = current.posicion.getX() + dir[0];
                 int newY = current.posicion.getY() + dir[1];
 
-                if (newX < 0 || newX >= Constants.CITY_LENGTH_X ||
-                        newY < 0 || newY >= Constants.CITY_WIDTH_Y) {
+                if (newX < 0 || newX > Constants.CITY_LENGTH_X ||
+                        newY < 0 || newY > Constants.CITY_WIDTH_Y) {
                     continue;
                 }
 
@@ -79,7 +86,7 @@ public class PathFinder {
             }
         }
 
-        return new PathResult(Collections.emptyList(), horaSalida, 0);
+        return null;
     }
 
     private static boolean esBloqueado(Position posicion, LocalDateTime momento, Environment entorno) {
@@ -101,20 +108,20 @@ public class PathFinder {
         return a.distanceTo(b);
     }
 
-    private static List<Position> construirResultado(Node destinoNode) {
-        List<Position> camino = new LinkedList<>();
+    private static List<Node> construirResultado(Node destinoNode) {
+        List<Node> camino = new LinkedList<>();
         Node current = destinoNode;
         while (current != null) {
-            camino.add(0, current.posicion);
+            camino.add(0, current);
             current = current.parent;
         }
         return camino;
     }
 
-    private static double calcularDistanciaTotal(List<Position> path) {
-        double distancia = 0.0;
+    private static int calcularDistancia(List<Node> path) {
+        int distancia = 0;
         for (int i = 0; i < path.size() - 1; i++) {
-            distancia += path.get(i).distanceTo(path.get(i + 1));
+            distancia += path.get(i).posicion.distanceTo(path.get(i + 1).posicion);
         }
         return distancia;
     }

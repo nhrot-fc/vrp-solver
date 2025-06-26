@@ -8,4 +8,5 @@ public interface RouteStop {
     Position getPosition();
     String getEntityID();
     LocalDateTime getArrivalTime();
+    RouteStop clone();
 }

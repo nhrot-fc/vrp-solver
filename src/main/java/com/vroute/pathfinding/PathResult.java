@@ -11,10 +11,8 @@ import java.util.List;
  */
 public class PathResult {
     private final List<Position> path;
-    private final LocalDateTime arrivalTime;
-    private final double totalDistance;
-    private final boolean pathFound;
-
+    private final List<LocalDateTime> arrivalTimes;
+    private final int distance;
     /**
      * Creates a new PathResult with the given path and metadata.
      * 
@@ -22,11 +20,10 @@ public class PathResult {
      * @param arrivalTime Estimated arrival time at the destination
      * @param totalDistance Total distance of the path in kilometers
      */
-    public PathResult(List<Position> path, LocalDateTime arrivalTime, double totalDistance) {
+    public PathResult(List<Position> path, List<LocalDateTime> arrivalTimes, int totalDistance) {
         this.path = path;
-        this.arrivalTime = arrivalTime;
-        this.totalDistance = totalDistance;
-        this.pathFound = !path.isEmpty();
+        this.arrivalTimes = arrivalTimes;
+        this.distance = totalDistance;
     }
 
     /**
@@ -43,8 +40,8 @@ public class PathResult {
      * 
      * @return The arrival time
      */
-    public LocalDateTime getArrivalTime() {
-        return arrivalTime;
+    public List<LocalDateTime> getArrivalTimes() {
+        return arrivalTimes;
     }
 
     /**
@@ -52,16 +49,7 @@ public class PathResult {
      * 
      * @return The distance in kilometers
      */
-    public double getTotalDistance() {
-        return totalDistance;
-    }
-
-    /**
-     * Checks if a valid path was found.
-     * 
-     * @return true if a path was found, false otherwise
-     */
-    public boolean isPathFound() {
-        return pathFound;
+    public int getDistance() {
+        return distance;
     }
 } 

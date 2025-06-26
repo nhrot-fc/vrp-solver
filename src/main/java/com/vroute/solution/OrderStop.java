@@ -1,7 +1,9 @@
 package com.vroute.solution;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
+import com.vroute.models.Constants;
 import com.vroute.models.Position;
 
 public class OrderStop implements RouteStop {
@@ -34,14 +36,19 @@ public class OrderStop implements RouteStop {
 
     @Override
     public String toString() {
-        return "OrderStop{" +
-                "orderId='" + orderId + '\'' +
-                ", position=" + position +
-                ", arrivalTime=" + arrivalTime +
-                '}';
+        return String.format("📦 %s [%s] [GLP: %d m³] %s", 
+                orderId, 
+                arrivalTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)), 
+                glpDelivery, 
+                position);
     }
 
     public int getGlpDelivery() {
         return glpDelivery;
+    }
+
+    @Override
+    public OrderStop clone() {
+        return new OrderStop(orderId, position, arrivalTime, glpDelivery);
     }
 }

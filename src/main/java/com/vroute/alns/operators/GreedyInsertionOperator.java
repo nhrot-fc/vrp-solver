@@ -118,7 +118,7 @@ public class GreedyInsertionOperator extends AbstractOperator implements RepairO
                 stops.add(bestPosition.stopIndex, orderStop);
                 
                 // Create a new route with the updated stops
-                Route newRoute = new Route(route.getId(), route.getVehicle(), stops);
+                Route newRoute = new Route(route.getVehicle(), stops, route.getStartTime());
                 routes.set(bestPosition.routeIndex, newRoute);
             } else {
                 // If no feasible position was found, create a new route if possible
@@ -144,7 +144,7 @@ public class GreedyInsertionOperator extends AbstractOperator implements RepairO
                     stops.add(orderStop);
                     
                     // Create a new route
-                    Route newRoute = new Route("R" + (routes.size() + 1), vehicle, stops);
+                    Route newRoute = new Route(vehicle, stops, environment.getCurrentTime());
                     routes.add(newRoute);
                     break;
                 }

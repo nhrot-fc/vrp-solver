@@ -10,7 +10,7 @@ public enum IncidentType {
      * - 2 hours immobilization
      * - Vehicle can continue its route afterward
      */
-    TI1(2, 0),
+    TI1(2, 0, "🔧"),
     
     /**
      * Type 2: Requires repair (e.g., engine obstruction)
@@ -18,7 +18,7 @@ public enum IncidentType {
      * - 1 shift of inactivity for repairs
      * - Vehicle must return to depot
      */
-    TI2(2, 1),
+    TI2(2, 1, "⚙️"),
     
     /**
      * Type 3: Serious incident (e.g., collision)
@@ -26,14 +26,16 @@ public enum IncidentType {
      * - 3 days of inactivity for repairs
      * - Vehicle must return to depot
      */
-    TI3(4, 72); // 72 hours = 3 days
+    TI3(4, 72, "💥"); // 72 hours = 3 days
     
     private final int immobilizationHours;
     private final int repairHours;
+    private final String emoji;
     
-    IncidentType(int immobilizationHours, int repairHours) {
+    IncidentType(int immobilizationHours, int repairHours, String emoji) {
         this.immobilizationHours = immobilizationHours;
         this.repairHours = repairHours;
+        this.emoji = emoji;
     }
     
     /**
@@ -61,5 +63,23 @@ public enum IncidentType {
      */
     public boolean mustReturnToDepot() {
         return this != TI1;
+    }
+    
+    /**
+     * Gets the emoji representing this incident type.
+     * 
+     * @return The emoji as a String
+     */
+    public String getEmoji() {
+        return emoji;
+    }
+    
+    @Override
+    public String toString() {
+        return String.format("%s %s [⏱️ %dh+%dh]", 
+                name(), 
+                emoji, 
+                immobilizationHours, 
+                repairHours);
     }
 }

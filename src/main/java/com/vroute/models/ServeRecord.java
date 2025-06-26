@@ -1,6 +1,7 @@
 package com.vroute.models;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class ServeRecord {
     private final String vehicleId;
@@ -37,6 +38,7 @@ public class ServeRecord {
                 vehicleId, 
                 orderId,
                 servedGlpM3, 
-                serveTime.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")));
+                serveTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)));
+
     }
 }

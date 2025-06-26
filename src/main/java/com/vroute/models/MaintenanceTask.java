@@ -102,12 +102,11 @@ public class MaintenanceTask {
     
     @Override
     public String toString() {
-        DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        return String.format("🔧 Maintenance: %s on %s from %s to %s",
+        String status = completed ? "✅" : "⏳";
+        return String.format("%s 🔧 %s %s", 
+                status,
                 vehicleId,
-                startTime.toLocalDate(),
-                startTime.format(dateFormat),
-                endTime.format(dateFormat));
+                startTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)));
     }
     
     public String toRecordString() {

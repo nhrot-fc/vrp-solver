@@ -1,6 +1,7 @@
 package com.vroute.models;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -259,69 +260,38 @@ public class Environment {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("🌍 Environment: ")
-                .append(currentTime.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")));
-
-        sb.append("\n📋 Vehicles (").append(vehicles.size()).append("):");
-        for (Vehicle vehicle : vehicles) {
-            sb.append("\n  ").append(vehicle);
-        }
-
-        sb.append("\n📋 Depots (").append(auxDepots.size()).append("):");
-        for (Depot depot : auxDepots) {
-            sb.append("\n  ").append(depot);
-        }
-
-        sb.append("\n📋 Orders (").append(orderQueue.size()).append("):");
-        long pending = orderQueue.stream().filter(o -> !o.isDelivered() && !o.isOverdue(currentTime)).count();
         long delivered = orderQueue.stream().filter(Order::isDelivered).count();
         long overdue = orderQueue.stream().filter(o -> !o.isDelivered() && o.isOverdue(currentTime)).count();
-
-        for (Order order : orderQueue) {
-            if (order.isDelivered()) {
-                // Optionally skip delivered orders in detailed list or handle as needed
-            } else if (order.isOverdue(currentTime)) {
-                sb.append("\n  ").append(order).append(" ⚠️ OVERDUE");
-            } else {
-                sb.append("\n  ").append(order);
-            }
-        }
-
-        sb.append("\n  📊 Summary: ").append(pending).append(" pending, ")
-                .append(overdue).append(" overdue, ")
-                .append(delivered).append(" delivered");
-
+        
         List<Blockage> currentBlockages = getActiveBlockagesAt(currentTime);
-        sb.append("\n📋 Active Blockages (").append(currentBlockages.size()).append("):");
-        for (Blockage blockage : currentBlockages) {
-            sb.append("\n  ").append(blockage);
-        }
-
+        
         int activeIncidentCount = 0;
-        sb.append("\n📋 Active Incidents:");
         for (Vehicle vehicle : vehicles) {
             List<Incident> activeIncidents = getActiveIncidentsForVehicle(vehicle.getId());
             for (Incident incident : activeIncidents) {
                 if (!incident.isResolved() && incident.getOccurrenceTime() != null) {
-                    sb.append("\n  ").append(incident);
                     activeIncidentCount++;
                 }
             }
         }
-        sb.append("\n  📊 Total: ").append(activeIncidentCount).append(" active incidents");
-
+        
         int todayMaintenanceCount = 0;
-        sb.append("\n📋 Today's Maintenance Tasks:");
         for (MaintenanceTask task : maintenanceTasks) {
             if (task.isActiveAt(currentTime)) {
-                sb.append("\n  ").append(task);
                 todayMaintenanceCount++;
             }
         }
-        sb.append("\n  📊 Total: ").append(todayMaintenanceCount).append(" maintenance tasks today");
-
-        return sb.toString();
+        
+        return String.format("🌍 %s 🚛 %d 🏭 %d 📦 %d(%d⚠️/%d✅) 🚧 %d ⚙️ %d 🔧 %d", 
+            currentTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)),
+            vehicles.size(),
+            auxDepots.size() + 1,
+            orderQueue.size(),
+            overdue,
+            delivered,
+            currentBlockages.size(),
+            activeIncidentCount,
+            todayMaintenanceCount);
     }
 
     /**

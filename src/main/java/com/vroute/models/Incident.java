@@ -1,6 +1,7 @@
 package com.vroute.models;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Represents a vehicle incident (breakdown/malfunction) that can occur during operations.
@@ -160,20 +161,20 @@ public class Incident {
     
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Incident [").append(vehicleId).append(", ").append(type).append(", ").append(shift);
-        
+        String status = resolved ? "✅" : "⚠️";
+        String timeInfo;
         if (occurrenceTime != null) {
-            sb.append(", Occurred at: ").append(occurrenceTime);
-            sb.append(", Location: ").append(location);
-            sb.append(", Available at: ").append(calculateAvailabilityTime());
-            sb.append(", Transferable GLP: ").append(transferableGlp).append(" m³");
-            sb.append(", Status: ").append(resolved ? "Resolved" : "Active");
+            timeInfo = occurrenceTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT));
         } else {
-            sb.append(", Not yet occurred");
+            timeInfo = "Not yet occurred";
         }
         
-        sb.append("]");
-        return sb.toString();
+        return String.format("%s %s %s %s [GLP:%.1fm³] %s", 
+                status,
+                type.getEmoji(),
+                vehicleId,
+                timeInfo,
+                transferableGlp,
+                location != null ? location.toString() : "?");
     }
 }

@@ -155,7 +155,7 @@ public class RegretInsertionOperator extends AbstractOperator implements RepairO
             stops.add(insertionOption.stopIndex, orderStop);
             
             // Create a new route with the updated stops
-            Route newRoute = new Route(route.getId(), route.getVehicle(), stops);
+            Route newRoute = new Route(route.getVehicle(), stops, route.getStartTime());
             routes.set(insertionOption.routeIndex, newRoute);
             
             // Remove the inserted order from the unassigned list

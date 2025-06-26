@@ -1,6 +1,7 @@
 package com.vroute.models;
 
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Represents the work shifts used for scheduling and incident management.
@@ -65,5 +66,13 @@ public enum Shift {
             case T3: return T1;
             default: return T1; // Should never happen
         }
+    }
+    
+    @Override
+    public String toString() {
+        return String.format("⏱️ %s [%s-%s]", 
+                name(), 
+                startTime.format(DateTimeFormatter.ofPattern("HH:mm")), 
+                endTime.format(DateTimeFormatter.ofPattern("HH:mm")));
     }
 }

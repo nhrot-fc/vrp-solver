@@ -12,9 +12,12 @@ public class TestRunner {
         TestFramework.TestRunner runner = new TestFramework.TestRunner();
         
         // Registrar suites de tests
-        runner.addSuite(EvaluatorTestSuite.createSuite());
-        runner.addSuite(SIHSolverTestSuite.createSuite());
-        runner.addSuite(TabuSearchTestSuite.createSuite());
+        runner.addSuite(RouteFixerTest.createSuite());
+        runner.addSuite(RearrangeMoveTest.createSuite());
+        runner.addSuite(EvaluatorTest.createSuite());
+        //runner.addSuite(SIHSolverTestSuite.createSuite());
+        //runner.addSuite(TabuSearchTestSuite.createSuite());
+        runner.addSuite(CompleteTest.createSuite());
         
         // Ejecutar todos los tests y obtener el reporte
         TestFramework.TestReport report = runner.runAll();
