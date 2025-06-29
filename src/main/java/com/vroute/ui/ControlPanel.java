@@ -8,7 +8,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Hashtable;
 
 import com.vroute.models.Environment;
-import com.vroute.orchest.Orchestrator;
 
 public class ControlPanel extends JPanel {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -16,10 +15,6 @@ public class ControlPanel extends JPanel {
     private Environment environment;
     private JLabel timeLabel;
     private JSlider speedSlider;
-    
-    // Algoritmos
-    private JComboBox<String> algorithmSelector;
-    private Orchestrator orchestrator;
 
     // Simulation controls
     private JButton startButton;
@@ -54,30 +49,12 @@ public class ControlPanel extends JPanel {
         timePanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
         timeLabel = new JLabel("Current Time: Not initialized");
         timePanel.add(timeLabel);
-        
+
         JPanel leftPanel = new JPanel(new BorderLayout());
         leftPanel.add(timePanel, BorderLayout.WEST);
         controlsPanel.add(leftPanel);
         controlsPanel.add(Box.createHorizontalGlue());
 
-        // Algorithm selector
-        JPanel algorithmPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
-        algorithmPanel.add(new JLabel("Algoritmo:"));
-        
-        algorithmSelector = new JComboBox<>(new String[] {"ALNS", "Tabú Search"});
-        algorithmSelector.addActionListener(e -> {
-            if (orchestrator != null) {
-                int selectedIndex = algorithmSelector.getSelectedIndex();
-                if (selectedIndex == 0) {
-                    orchestrator.setAlgorithm(Orchestrator.AlgorithmType.ALNS);
-                } else if (selectedIndex == 1) {
-                    orchestrator.setAlgorithm(Orchestrator.AlgorithmType.TABU_SEARCH);
-                }
-            }
-        });
-        algorithmPanel.add(algorithmSelector);
-        
-        controlsPanel.add(algorithmPanel);
         controlsPanel.add(Box.createHorizontalGlue());
 
         // Simulation control buttons in a compact panel (center)
@@ -216,25 +193,33 @@ public class ControlPanel extends JPanel {
             }
         }
     }
-    
+
     /**
      * Gets the current simulation speed in milliseconds
+     * 
      * @return Delay in milliseconds between simulation steps
      */
     public int getSimulationSpeed() {
         int value = speedSlider.getValue();
         switch (value) {
-            case 1: return 1000;
-            case 2: return 500;
-            case 3: return 250;
-            case 4: return 125;
-            case 5: return 50;
-            default: return 1000;
+            case 1:
+                return 1000;
+            case 2:
+                return 500;
+            case 3:
+                return 250;
+            case 4:
+                return 125;
+            case 5:
+                return 50;
+            default:
+                return 1000;
         }
     }
-    
+
     /**
      * Sets the simulation timer from an external source
+     * 
      * @param timer The timer to use for simulation
      */
     public void setSimulationTimer(Timer timer) {
@@ -242,15 +227,15 @@ public class ControlPanel extends JPanel {
         if (simulationTimer != null && simulationTimer.isRunning()) {
             simulationTimer.stop();
         }
-        
+
         this.simulationTimer = timer;
         simulationRunning = timer != null && timer.isRunning();
-        
+
         // Update button states
         startButton.setEnabled(!simulationRunning);
         pauseButton.setEnabled(simulationRunning);
     }
-    
+
     /**
      * Stops the simulation timer
      */
@@ -269,35 +254,27 @@ public class ControlPanel extends JPanel {
         startButton.setEnabled(true);
         resetButton.setEnabled(true);
     }
-    
-    /**
-     * Establece el orquestador para poder cambiar el algoritmo
-     * @param orchestrator El orquestador de la simulación
-     */
-    public void setOrchestrator(Orchestrator orchestrator) {
-        this.orchestrator = orchestrator;
-        if (orchestrator != null) {
-            // Actualizar el selector de algoritmos según el algoritmo actual
-            if (orchestrator.getCurrentAlgorithm() == Orchestrator.AlgorithmType.ALNS) {
-                algorithmSelector.setSelectedIndex(0);
-            } else if (orchestrator.getCurrentAlgorithm() == Orchestrator.AlgorithmType.TABU_SEARCH) {
-                algorithmSelector.setSelectedIndex(1);
-            }
-        }
-    }
 
+    /**
+     * Sets the advance time listener
+     * 
+     * @param listener The action listener to be called when the advance time
+     *                 button is pressed
+     */
     public void setAdvanceTimeListener(ActionListener listener) {
         this.advanceTimeListener = listener;
     }
-    
+
     /**
      * Sets the reset event listener
-     * @param listener The action listener to be called when the reset button is pressed
+     * 
+     * @param listener The action listener to be called when the reset button is
+     *                 pressed
      */
     public void setResetListener(ActionListener listener) {
         this.resetListener = listener;
     }
-    
+
     /**
      * Sets a custom action listener for the start button
      * 
@@ -311,7 +288,7 @@ public class ControlPanel extends JPanel {
         // Add new listener
         startButton.addActionListener(listener);
     }
-    
+
     /**
      * Sets a custom action listener for the pause button
      * 
@@ -325,7 +302,7 @@ public class ControlPanel extends JPanel {
         // Add new listener
         pauseButton.addActionListener(listener);
     }
-    
+
     /**
      * Sets a custom action listener for the reset button
      * 
@@ -403,10 +380,10 @@ public class ControlPanel extends JPanel {
                     resetListener.actionPerformed(null);
                 } else {
                     JOptionPane.showMessageDialog(
-                        this,
-                        "Reset functionality is not connected. Please connect a reset listener to the control panel.",
-                        "Reset Simulation",
-                        JOptionPane.INFORMATION_MESSAGE);
+                            this,
+                            "Reset functionality is not connected. Please connect a reset listener to the control panel.",
+                            "Reset Simulation",
+                            JOptionPane.INFORMATION_MESSAGE);
                 }
             }
         }

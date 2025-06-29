@@ -7,19 +7,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.vroute.solution.Solution;
-
 public class Environment {
     private final List<Vehicle> vehicles;
     private final Depot mainDepot;
     private final List<Depot> auxDepots;
 
     private LocalDateTime currentTime;
-    private final List<Order> orderQueue;
-    private final List<Blockage> activeBlockages;
-    private final List<Incident> incidentRegistry;
-    private final List<MaintenanceTask> maintenanceTasks;
-    private List<Solution> currentSolution;
+    private final List<Order> pendingOrders;
+    private final List<Blockage> blockages;
+    private final List<Incident> activeIncidents;
+    private final List<Maintenance> activeMaintenance;
 
     public Environment(List<Vehicle> vehicles, Depot mainDepot, List<Depot> auxDepots,
             LocalDateTime referenceDateTime) {
@@ -27,11 +24,10 @@ public class Environment {
         this.vehicles = new ArrayList<>(vehicles);
         this.mainDepot = mainDepot;
         this.auxDepots = new ArrayList<>(auxDepots);
-        this.orderQueue = new ArrayList<>();
-        this.activeBlockages = new ArrayList<>();
-        this.incidentRegistry = new ArrayList<>();
-        this.maintenanceTasks = new ArrayList<>();
-        this.currentSolution = new ArrayList<>();
+        this.pendingOrders = new ArrayList<>();
+        this.blockages = new ArrayList<>();
+        this.activeIncidents = new ArrayList<>();
+        this.activeMaintenance = new ArrayList<>();
     }
 
     public List<Vehicle> getVehicles() {
@@ -52,28 +48,16 @@ public class Environment {
         return currentTime;
     }
 
-    public List<Order> getOrderQueue() {
-        return Collections.unmodifiableList(orderQueue);
+    public List<Blockage> getBlockages() {
+        return Collections.unmodifiableList(blockages);
     }
 
-    public List<Blockage> getActiveBlockages() {
-        return Collections.unmodifiableList(activeBlockages);
+    public List<Incident> getActiveIncidents() {
+        return Collections.unmodifiableList(activeIncidents);
     }
 
-    public List<Incident> getIncidentRegistry() {
-        return Collections.unmodifiableList(incidentRegistry);
-    }
-
-    public List<MaintenanceTask> getMaintenanceTasks() {
-        return Collections.unmodifiableList(maintenanceTasks);
-    }
-
-    public List<Solution> getCurrentSolution() {
-        return Collections.unmodifiableList(currentSolution);
-    }
-
-    public void setCurrentSolution(List<Solution> currentSolution) {
-        this.currentSolution = new ArrayList<>(currentSolution);
+    public List<Maintenance> getActiveMaintenance() {
+        return Collections.unmodifiableList(activeMaintenance);
     }
 
     public Depot getMainDepot() {
@@ -85,27 +69,27 @@ public class Environment {
     }
 
     public void addOrder(Order order) {
-        orderQueue.add(order);
+        pendingOrders.add(order);
     }
 
     public void addOrders(List<Order> orders) {
-        orderQueue.addAll(orders);
+        pendingOrders.addAll(orders);
     }
 
     public int removeDeliveredOrders() {
-        int initialSize = orderQueue.size();
-        orderQueue.removeIf(Order::isDelivered);
-        return initialSize - orderQueue.size();
+        int initialSize = pendingOrders.size();
+        pendingOrders.removeIf(Order::isDelivered);
+        return initialSize - pendingOrders.size();
     }
 
     public List<Order> getPendingOrders() {
-        return orderQueue.stream()
+        return pendingOrders.stream()
                 .filter(order -> !order.isDelivered())
                 .collect(Collectors.toList());
     }
 
     public List<Order> getOverdueOrders() {
-        return orderQueue.stream()
+        return pendingOrders.stream()
                 .filter(order -> !order.isDelivered() && order.isOverdue(currentTime))
                 .collect(Collectors.toList());
     }
@@ -119,29 +103,29 @@ public class Environment {
     }
 
     public void addBlockage(Blockage blockage) {
-        activeBlockages.add(blockage);
+        blockages.add(blockage);
     }
 
     public void addBlockages(List<Blockage> blockages) {
-        activeBlockages.addAll(blockages);
+        blockages.addAll(blockages);
     }
 
     public List<Blockage> getActiveBlockagesAt(LocalDateTime dateTime) {
-        return activeBlockages.stream()
+        return blockages.stream()
                 .filter(b -> b.isActiveAt(dateTime))
                 .collect(Collectors.toList());
     }
 
     public void addIncident(Incident incident) {
-        incidentRegistry.add(incident);
+        activeIncidents.add(incident);
     }
 
     public void addIncidents(List<Incident> incidents) {
-        incidentRegistry.addAll(incidents);
+        activeIncidents.addAll(incidents);
     }
 
     public List<Incident> getActiveIncidentsForVehicle(String vehicleId) {
-        return incidentRegistry.stream()
+        return activeIncidents.stream()
                 .filter(incident -> incident.getVehicleId().equals(vehicleId) &&
                         !incident.isResolved() &&
                         incident.getOccurrenceTime() != null &&
@@ -149,16 +133,16 @@ public class Environment {
                 .collect(Collectors.toList());
     }
 
-    public void addMaintenanceTask(MaintenanceTask task) {
-        maintenanceTasks.add(task);
+    public void addMaintenanceTask(Maintenance task) {
+        activeMaintenance.add(task);
     }
 
-    public void addMaintenanceTasks(List<MaintenanceTask> tasks) {
-        maintenanceTasks.addAll(tasks);
+    public void addMaintenanceTasks(List<Maintenance> tasks) {
+        activeMaintenance.addAll(tasks);
     }
 
     public boolean hasScheduledMaintenance(String vehicleId, LocalDateTime dateTime) {
-        for (MaintenanceTask task : maintenanceTasks) {
+        for (Maintenance task : activeMaintenance) {
             if (task.getVehicleId().equals(vehicleId) && task.isActiveAt(dateTime)) {
                 return true;
             }
@@ -166,8 +150,8 @@ public class Environment {
         return false;
     }
 
-    public MaintenanceTask getMaintenanceTaskForVehicle(String vehicleId, LocalDateTime dateTime) {
-        for (MaintenanceTask task : maintenanceTasks) {
+    public Maintenance getMaintenanceTaskForVehicle(String vehicleId, LocalDateTime dateTime) {
+        for (Maintenance task : activeMaintenance) {
             if (task.getVehicleId().equals(vehicleId) && task.isActiveAt(dateTime)) {
                 return task;
             }
@@ -221,37 +205,37 @@ public class Environment {
     }
 
     public void clearAllOrders() {
-        orderQueue.clear();
+        pendingOrders.clear();
     }
 
     /**
      * Clears all active blockages
      */
     public void clearBlockages() {
-        activeBlockages.clear();
+        blockages.clear();
     }
-    
+
     /**
      * Clears all recorded incidents
      */
     public void clearIncidents() {
-        incidentRegistry.clear();
+        activeIncidents.clear();
     }
-    
+
     /**
      * Clears all maintenance tasks
      */
     public void clearMaintenanceTasks() {
-        maintenanceTasks.clear();
+        activeMaintenance.clear();
     }
-    
+
     /**
      * Reset depots to their initial state (refill GLP)
      */
     public void resetDepots() {
         // Refill main depot
         mainDepot.refillGLP();
-        
+
         // Refill aux depots
         for (Depot depot : auxDepots) {
             depot.refillGLP();
@@ -260,11 +244,11 @@ public class Environment {
 
     @Override
     public String toString() {
-        long delivered = orderQueue.stream().filter(Order::isDelivered).count();
-        long overdue = orderQueue.stream().filter(o -> !o.isDelivered() && o.isOverdue(currentTime)).count();
-        
+        long delivered = pendingOrders.stream().filter(Order::isDelivered).count();
+        long overdue = pendingOrders.stream().filter(o -> !o.isDelivered() && o.isOverdue(currentTime)).count();
+
         List<Blockage> currentBlockages = getActiveBlockagesAt(currentTime);
-        
+
         int activeIncidentCount = 0;
         for (Vehicle vehicle : vehicles) {
             List<Incident> activeIncidents = getActiveIncidentsForVehicle(vehicle.getId());
@@ -274,56 +258,60 @@ public class Environment {
                 }
             }
         }
-        
+
         int todayMaintenanceCount = 0;
-        for (MaintenanceTask task : maintenanceTasks) {
+        for (Maintenance task : activeMaintenance) {
             if (task.isActiveAt(currentTime)) {
                 todayMaintenanceCount++;
             }
         }
-        
-        return String.format("🌍 %s 🚛 %d 🏭 %d 📦 %d(%d⚠️/%d✅) 🚧 %d ⚙️ %d 🔧 %d", 
-            currentTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)),
-            vehicles.size(),
-            auxDepots.size() + 1,
-            orderQueue.size(),
-            overdue,
-            delivered,
-            currentBlockages.size(),
-            activeIncidentCount,
-            todayMaintenanceCount);
+
+        return String.format("🌍 %s 🚛 %d 🏭 %d 📦 %d(%d⚠️/%d✅) 🚧 %d ⚙️ %d 🔧 %d",
+                currentTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)),
+                vehicles.size(),
+                auxDepots.size() + 1,
+                pendingOrders.size(),
+                overdue,
+                delivered,
+                currentBlockages.size(),
+                activeIncidentCount,
+                todayMaintenanceCount);
     }
 
     /**
      * Creates a deep copy of this environment
+     * 
      * @return A new Environment instance with copies of all internal state
      */
     public Environment clone() {
-        // Create new environment with copies of immutable objects
-        Environment cloned = new Environment(
-            new ArrayList<>(vehicles), 
-            mainDepot,  // Depot is assumed to be immutable or has its own clone method
-            new ArrayList<>(auxDepots),
-            LocalDateTime.of(currentTime.toLocalDate(), currentTime.toLocalTime())
-        );
-        
-        // Copy orders
-        cloned.addOrders(new ArrayList<>(orderQueue));
-        
-        // Copy blockages
-        cloned.addBlockages(new ArrayList<>(activeBlockages));
-        
-        // Copy incidents
-        cloned.addIncidents(new ArrayList<>(incidentRegistry));
-        
-        // Copy maintenance tasks
-        cloned.addMaintenanceTasks(new ArrayList<>(maintenanceTasks));
-        
-        // Copy current solution if exists
-        if (currentSolution != null) {
-            cloned.setCurrentSolution(new ArrayList<>(currentSolution));
+        List<Vehicle> clonedVehicles = new ArrayList<>();
+        for (Vehicle vehicle : vehicles) {
+            clonedVehicles.add(vehicle.clone());
         }
-        
+
+        Depot clonedMainDepot = mainDepot.clone();
+        List<Depot> clonedAuxDepots = new ArrayList<>();
+        for (Depot depot : auxDepots) {
+            clonedAuxDepots.add(depot.clone());
+        }
+
+        Environment cloned = new Environment(clonedVehicles, clonedMainDepot, clonedAuxDepots, currentTime);
+        List<Order> clonedOrders = new ArrayList<>();
+        for (Order order : pendingOrders) {
+            clonedOrders.add(order.clone());
+        }
+        cloned.addOrders(clonedOrders);
+        List<Blockage> clonedBlockages = new ArrayList<>();
+        for (Blockage blockage : blockages) {
+            clonedBlockages.add(blockage.clone());
+        }
+        cloned.addBlockages(clonedBlockages);
+        List<Incident> clonedIncidents = new ArrayList<>();
+        for (Incident incident : activeIncidents) {
+            clonedIncidents.add(incident.clone());
+        }
+        cloned.addIncidents(clonedIncidents);
+        cloned.addMaintenanceTasks(activeMaintenance);
         return cloned;
     }
 }

@@ -76,4 +76,9 @@ public class Blockage {
             endTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)), 
             blockagePoints.size());
     }
+
+    @Override
+    public Blockage clone() {
+        return new Blockage(startTime, endTime, lines);
+    }
 }

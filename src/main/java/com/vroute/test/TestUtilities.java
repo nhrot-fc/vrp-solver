@@ -4,12 +4,12 @@ import com.vroute.models.Blockage;
 import com.vroute.models.Constants;
 import com.vroute.models.Depot;
 import com.vroute.models.Environment;
+import com.vroute.models.Order;
 import com.vroute.models.Vehicle;
 import com.vroute.models.VehicleType;
 import com.vroute.models.Position;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +28,12 @@ public class TestUtilities {
         vehicles.add(new Vehicle("TC06", VehicleType.TC, Constants.CENTRAL_STORAGE_LOCATION));
         vehicles.add(new Vehicle("TD07", VehicleType.TD, Constants.CENTRAL_STORAGE_LOCATION));
         vehicles.add(new Vehicle("TD08", VehicleType.TD, Constants.CENTRAL_STORAGE_LOCATION));
+
+        // Initialize all vehicles with fuel for testing
+        for (Vehicle vehicle : vehicles) {
+            vehicle.refuel();
+        }
+
         return vehicles;
     }
 
@@ -53,19 +59,54 @@ public class TestUtilities {
             depot.refillGLP();
         }
 
-        // Add blockages in a straight line from (0,0) to (15,15)
-        // This will force the pathfinder to find an alternative route
+        // Add blockages in a straight line from (0,0) -> (15,0) -> (15,20)
         List<Position> blockagePositions = new ArrayList<>();
-        for (int i = 5; i < 12; i++) {
-            blockagePositions.add(new Position(i, i));
-        }
+        blockagePositions.add(new Position(0, 0));
+        blockagePositions.add(new Position(15, 0));
+        blockagePositions.add(new Position(15, 20));
 
-        LocalDateTime blockageStart = LocalDateTime.of(2025, 1, 1, 0, 0);
-        LocalDateTime blockageEnd = blockageStart.plus(1, ChronoUnit.DAYS);
+        LocalDateTime blockageStart = env.getCurrentTime().minusDays(1);
+        LocalDateTime blockageEnd = blockageStart.plusDays(50);
 
         Blockage blockage = new Blockage(blockageStart, blockageEnd, blockagePositions);
         env.addBlockage(blockage);
 
         return env;
+    }
+
+    /**
+     * Creates a small set of sample orders
+     */
+    public static List<Order> createSmallOrders(LocalDateTime baseTime) {
+        List<Order> orders = new ArrayList<>();
+
+        // Create 5 small orders with different positions
+        orders.add(new Order("O1", baseTime, baseTime.plusHours(4), 5, new Position(5, 5)));
+        orders.add(new Order("O2", baseTime, baseTime.plusHours(5), 10, new Position(10, 10)));
+        orders.add(new Order("O3", baseTime, baseTime.plusHours(6), 11, new Position(15, 15)));
+        orders.add(new Order("O4", baseTime, baseTime.plusHours(7), 8, new Position(20, 20)));
+        orders.add(new Order("O5", baseTime, baseTime.plusHours(8), 2, new Position(25, 25)));
+
+        return orders;
+    }
+
+    /**
+     * Creates a larger set of sample orders
+     */
+    public static List<Order> createLargeOrders(LocalDateTime baseTime) {
+        List<Order> orders = new ArrayList<>();
+
+        // Create 20 orders at various positions
+        for (int i = 0; i < 20; i++) {
+            String id = "O" + (i + 1);
+            int x = 5 + (i * 3) % 50; // Distribute in a grid pattern
+            int y = 5 + (i / 5) * 10;
+            int glpRequest = 3 + (i % 10); // Vary GLP requests between 3 and 12
+
+            orders.add(new Order(id, baseTime, baseTime.plusHours(4 + (i % 10)),
+                    glpRequest, new Position(x, y)));
+        }
+
+        return orders;
     }
 }

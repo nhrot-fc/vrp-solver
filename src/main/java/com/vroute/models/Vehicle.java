@@ -81,7 +81,7 @@ public class Vehicle {
     // Clone
     public Vehicle clone() {
         Vehicle clonedVehicle = new Vehicle(this.id, this.type, this.currentPosition.clone());
-        clonedVehicle.currentGlpM3 = Math.min(this.currentGlpM3, clonedVehicle.glpCapacityM3);
+        clonedVehicle.currentGlpM3 = this.currentGlpM3;
         clonedVehicle.currentFuelGal = this.currentFuelGal;
         clonedVehicle.status = this.status;
         return clonedVehicle;

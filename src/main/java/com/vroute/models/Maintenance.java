@@ -6,14 +6,14 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
-public class MaintenanceTask {
+public class Maintenance {
     private final String vehicleId;
     private final LocalDateTime startTime;
     private final LocalDateTime endTime;
     private final int repeatMonths; // Number of months between repetitions (default 2)
     private boolean completed;
 
-    public MaintenanceTask(String vehicleId, LocalDate date) {
+    public Maintenance(String vehicleId, LocalDate date) {
         this.vehicleId = vehicleId;
         this.startTime = date.atStartOfDay(); // 00:00
         this.endTime = date.atTime(LocalTime.MAX); // 23:59:59.999999999
@@ -21,7 +21,7 @@ public class MaintenanceTask {
         this.completed = false;
     }
     
-    public MaintenanceTask(String vehicleId, LocalDateTime startTime, LocalDateTime endTime) {
+    public Maintenance(String vehicleId, LocalDateTime startTime, LocalDateTime endTime) {
         this.vehicleId = vehicleId;
         this.startTime = startTime;
         this.endTime = endTime;
@@ -29,7 +29,7 @@ public class MaintenanceTask {
         this.completed = false;
     }
     
-    public MaintenanceTask(String vehicleId, LocalDateTime startTime, LocalDateTime endTime, int repeatMonths) {
+    public Maintenance(String vehicleId, LocalDateTime startTime, LocalDateTime endTime, int repeatMonths) {
         this.vehicleId = vehicleId;
         this.startTime = startTime;
         this.endTime = endTime;
@@ -73,13 +73,13 @@ public class MaintenanceTask {
         this.completed = completed;
     }
     
-    public MaintenanceTask createNextTask() {
+    public Maintenance createNextTask() {
         LocalDateTime nextStart = startTime.plusMonths(repeatMonths);
         LocalDateTime nextEnd = endTime.plusMonths(repeatMonths);
-        return new MaintenanceTask(vehicleId, nextStart, nextEnd, repeatMonths);
+        return new Maintenance(vehicleId, nextStart, nextEnd, repeatMonths);
     }
     
-    public static MaintenanceTask fromString(String record) {
+    public static Maintenance fromString(String record) {
         try {
             // Split the record into date and vehicle parts
             String[] parts = record.split(":");
@@ -94,7 +94,7 @@ public class MaintenanceTask {
             // Parse the vehicle ID
             String vehicleId = parts[1];
             
-            return new MaintenanceTask(vehicleId, date);
+            return new Maintenance(vehicleId, date);
         } catch (Exception e) {
             return null;
         }

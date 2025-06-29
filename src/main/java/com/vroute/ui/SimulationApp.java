@@ -164,9 +164,6 @@ public class SimulationApp extends JFrame {
         this.orchestrator = orchestrator;
         
         if (orchestrator != null) {
-            // Conectar el orquestrador al panel de control
-            controlPanel.setOrchestrator(orchestrator);
-            
             // Configure control panel actions
             controlPanel.setStartAction(e -> startSimulation());
             controlPanel.setPauseAction(e -> stopSimulation());
@@ -201,11 +198,6 @@ public class SimulationApp extends JFrame {
                     controller.resetSimulation();
                 }
             });
-            
-            // Conectar el orquestrador al panel de control
-            if (this.orchestrator != null) {
-                controlPanel.setOrchestrator(this.orchestrator);
-            }
         }
     }
     

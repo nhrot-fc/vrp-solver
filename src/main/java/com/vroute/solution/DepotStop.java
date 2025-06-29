@@ -1,20 +1,15 @@
 package com.vroute.solution;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
-import com.vroute.models.Constants;
 import com.vroute.models.Depot;
+import com.vroute.models.Order;
 import com.vroute.models.Position;
 
 public class DepotStop implements RouteStop {
     private final Depot depot;
-    private final LocalDateTime arrivalTime;
     private final int glpRecharge;
 
-    public DepotStop(Depot depot, LocalDateTime arrivalTime, int glpRecharge) {
+    public DepotStop(Depot depot, int glpRecharge) {
         this.depot = depot;
-        this.arrivalTime = arrivalTime;
         this.glpRecharge = glpRecharge;
     }
 
@@ -24,30 +19,32 @@ public class DepotStop implements RouteStop {
     }
 
     @Override
-    public String getEntityID() {
-        return depot.getId();
+    public Order getOrder() {
+        return null;
     }
 
     @Override
-    public LocalDateTime getArrivalTime() {
-        return arrivalTime;
+    public Depot getDepot() {
+        return depot;
     }
 
+    @Override
     public int getGlpRecharge() {
         return glpRecharge;
     }
 
     @Override
+    public int getGlpDelivery() {
+        return 0;
+    }
+
+    @Override
     public String toString() {
-        return String.format("🏭 %s [%s] [GLP: +%d m³] %s", 
-                depot.getId(), 
-                arrivalTime.format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)), 
-                glpRecharge, 
-                depot.getPosition());
+        return String.format("🏭 %s [GLP: +%d m³] %s", depot.getId(), glpRecharge, depot.getPosition());
     }
 
     @Override
     public DepotStop clone() {
-        return new DepotStop(depot, arrivalTime, glpRecharge);
+        return new DepotStop(depot.clone(), glpRecharge);
     }
 }

@@ -25,16 +25,29 @@ public class Route {
         return stops;
     }
 
+    public List<OrderStop> getOrderStops() {
+        List<OrderStop> orderStops = new ArrayList<>();
+        for (RouteStop stop : stops) {
+            if (stop instanceof OrderStop) {
+                orderStops.add((OrderStop) stop);
+            }
+        }
+        return orderStops;
+    }
+
     public LocalDateTime getStartTime() {
         return startTime;
     }
 
     @Override
     public String toString() {
-        return String.format("🛣️ [Vehicle: %s, Stops: %d, Start Time: %s]",
-                vehicle.getId(),
-                stops.size(),
-                startTime);
+        StringBuilder sb = new StringBuilder();
+        sb.append("🛣️ [Vehicle: ").append(vehicle.getId()).append(", Stops: ").append(stops.size())
+                .append(", Start Time: ").append(startTime).append("]\n");
+        for (RouteStop stop : stops) {
+            sb.append("\t").append(stop.toString()).append("\n");
+        }
+        return sb.toString();
     }
 
     @Override

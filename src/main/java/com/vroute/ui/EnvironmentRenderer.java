@@ -218,7 +218,7 @@ public class EnvironmentRenderer extends JPanel {
     private void drawOrders(Graphics2D g2d) {
         if (environment == null) return;
         
-        List<Order> orders = environment.getOrderQueue();
+        List<Order> orders = environment.getPendingOrders();
         for (Order order : orders) {
             if (!order.isDelivered()) {
                 Color orderColor = order.isOverdue(environment.getCurrentTime()) ? 

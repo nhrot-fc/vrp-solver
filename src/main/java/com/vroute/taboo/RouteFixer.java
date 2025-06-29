@@ -17,6 +17,12 @@ import com.vroute.solution.Route;
 import com.vroute.solution.RouteStop;
 
 public class RouteFixer {
+    private static void debug(String message) {
+        if (Constants.DEBUG) {
+            System.out.println("[RouteFixer] " + message);
+        }
+    }
+
     private static class TravelResult {
         private final List<DepotStop> visitedDepots;
         private final Vehicle updatedVehicle;
@@ -122,7 +128,7 @@ public class RouteFixer {
             updatedVehicle.refuel();
 
             // Registrar depósito visitado
-            visitedDepots.add(new DepotStop(fuelDepot, eta, 0)); // El 0 indica que solo repostamos combustible
+            visitedDepots.add(new DepotStop(fuelDepot, 0)); // El 0 indica que solo repostamos combustible
 
         }
 
@@ -139,9 +145,9 @@ public class RouteFixer {
 
         // Procesar cada pedido de la ruta
         for (OrderStop orderStop : orderStops) {
-
             if (orderStop.getGlpDelivery() > vehicleClone.getGlpCapacityM3()) {
-                debug("La orden " + orderStop.getEntityID() + " requiere más GLP que el vehículo puede transportar");
+                debug("La orden " + orderStop.getOrder().getId()
+                        + " requiere más GLP que el vehículo puede transportar");
                 return null;
             }
 
@@ -179,7 +185,7 @@ public class RouteFixer {
                 }
 
                 // Registrar la parada en el depósito de GLP
-                routeStops.add(new DepotStop(depot, currentTime, glpToRefill));
+                routeStops.add(new DepotStop(depot, glpToRefill));
             }
 
             // Paso 2: Viajar al punto de la orden
@@ -201,11 +207,23 @@ public class RouteFixer {
             vehicleClone.dispenseGlp(orderStop.getGlpDelivery());
 
             // Registrar la entrega de la orden
-            routeStops.add(new OrderStop(orderStop.getEntityID(), orderStop.getPosition(),
-                    currentTime, orderStop.getGlpDelivery()));
+            routeStops.add(new OrderStop(orderStop.getOrder(), orderStop.getPosition(), orderStop.getGlpDelivery()));
         }
 
-        return new Route(vehicleClone, routeStops, startTime);
+        // travel to main depot
+        TravelResult travelToMainDepot = driveTo(env, vehicleClone, env.getMainDepot().getPosition(), currentTime);
+        if (travelToMainDepot == null) {
+            debug("No se pudo calcular ruta al depósito principal");
+            return null;
+        }
+
+        // add main depot stop
+        routeStops.addAll(travelToMainDepot.getVisitedDepots());
+
+        // add depot stop
+        routeStops.add(new DepotStop(env.getMainDepot(), 0));
+
+        return new Route(vehicle, routeStops, startTime);
     }
 
     public static Depot findGLPSource(Environment env, int glpRequest, Position position, LocalDateTime currentTime) {
@@ -243,11 +261,5 @@ public class RouteFixer {
         }
 
         return bestDepot;
-    }
-
-    private static void debug(String message) {
-        if (Constants.DEBUG) {
-            System.out.println("[RouteFixer] " + message);
-        }
-    }
+    }    
 }

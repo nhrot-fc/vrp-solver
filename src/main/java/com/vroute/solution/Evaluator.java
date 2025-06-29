@@ -3,11 +3,11 @@ package com.vroute.solution;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import com.vroute.models.Constants;
 import com.vroute.models.Environment;
+import com.vroute.models.Depot;
 import com.vroute.models.Order;
 import com.vroute.models.Position;
 import com.vroute.models.Vehicle;
@@ -19,169 +19,145 @@ import com.vroute.pathfinding.PathResult;
  */
 public class Evaluator {
     // Constants for penalty calculation
-    private static final double UNDELIVERED_ORDER_PENALTY = 10000.0;
-    private static final double DISTANCE_COST_PER_KM = 10.0;
-    private static final double LATE_DELIVERY_PENALTY_PER_MINUTE = 50.0;
+    private static final double UNDELIVERED_ORDER_PENALTY = 50000.0;
+    private static final double LATE_DELIVERY_PENALTY = 10000.0;
+    private static final double INSUFFICIENT_FUEL_PENALTY = 20000.0;
+    private static final double DEPOT_NEGATIVE_GLP_PENALTY = 30000.0;
+
+    private static final double DISTANCE_COST_PER_KM = 0.1;
 
     private static void debug(String message) {
         if (Constants.DEBUG) {
-            System.out.println("[DEBUG-EVAL] " + message);
+            System.out.println("[Evaluator] " + message);
         }
     }
 
     public static double evaluateSolution(Environment env, Solution solution) {
-        if (solution == null || env == null) {
-            debug("Invalid solution or environment (null)");
-            return Double.NEGATIVE_INFINITY;
+        Map<String, Integer> deliveryMap = new HashMap<>();
+        Map<String, Integer> depotMap = new HashMap<>();
+
+        // Initialize maps with zero values
+        for (Order order : env.getPendingOrders()) {
+            deliveryMap.put(order.getId(), 0);
+        }
+        for (Depot depot : env.getDepots()) {
+            depotMap.put(depot.getId(), 0);
         }
 
-        debug("Evaluating solution with " + solution.getRoutes().size() + " routes");
-        double totalCost = 0.0;
-        Map<String, Integer> deliveredGlpByOrderId = new HashMap<>();
+        double totalDistance = 0.0;
+        double totalPenalty = 0.0;
 
-        // Evaluate each route
         for (Route route : solution.getRoutes()) {
-            double routeCost = evaluateRoute(env, route, solution.getOrders(), deliveredGlpByOrderId);
-            debug(String.format("Route %s cost: %f", route.getVehicle().getId(), routeCost));
-            totalCost += routeCost;
-        }
+            Vehicle currentVehicle = route.getVehicle().clone();
+            Position currentPosition = currentVehicle.getCurrentPosition();
+            LocalDateTime currentTime = route.getStartTime();
 
-        // Check if all orders are fully delivered
-        double undeliveredPenalty = 0.0;
-        for (Order order : solution.getOrders().values()) {
-            int requestedGlp = order.getGlpRequestM3();
-            int deliveredGlp = deliveredGlpByOrderId.getOrDefault(order.getId(), 0);
-
-            if (deliveredGlp < requestedGlp) {
-                // Order partially or not delivered
-                double undeliveredRatio = (double) (requestedGlp - deliveredGlp) / requestedGlp;
-                double penalty = UNDELIVERED_ORDER_PENALTY * undeliveredRatio;
-                undeliveredPenalty += penalty;
-                debug("Order " + order.getId() + " partially undelivered: " + undeliveredRatio +
-                        ", penalty: " + penalty);
-            }
-        }
-
-        totalCost += undeliveredPenalty;
-        debug("Total solution cost: " + totalCost + " (including undelivered penalty: " + undeliveredPenalty + ")");
-        return totalCost;
-    }
-
-    public static double evaluateRoute(Environment env, Route route, Map<String, Order> orders,
-            Map<String, Integer> deliveredGlpByOrderId) {
-        double routeCost = 0.0;
-        double latePenalty = 0.0;
-        double distanceCost = 0.0;
-
-        Vehicle currentVehicle = route.getVehicle().clone();
-        Position currentPosition = currentVehicle.getCurrentPosition();
-        LocalDateTime currentTime = route.getStartTime();
-        
-        for (RouteStop stop : route.getStops()) {
-            // check path to stop from current vehicle position
-            PathResult path = PathFinder.findPath(env, currentPosition, stop.getPosition(), currentTime);
-            if (path == null) {
-                debug("No path found from " + currentPosition + " to " + stop.getPosition());
-                return Double.NEGATIVE_INFINITY;
-            }
-
-            // Calculate distance and fuel consumption
-            int distance = path.getDistance();
-            double fuelConsumedGallons = currentVehicle.calculateFuelNeeded(distance);
-            
-            // Get arrival time at the destination from PathResult's arrivalTimes
-            List<LocalDateTime> arrivalTimes = path.getArrivalTimes();
-            if (arrivalTimes == null || arrivalTimes.isEmpty()) {
-                debug("Path result contains no arrival times");
-                return Double.NEGATIVE_INFINITY;
-            }
-            
-            LocalDateTime arrivalTime = arrivalTimes.getLast();
-            
-            // Update the RouteStop with the calculated arrival time
-            // Note: This won't actually modify the stop in the original solution,
-            // but it's useful for more accurate evaluation
-            
-            // Check if vehicle has enough fuel to reach stop
-            if (currentVehicle.getCurrentFuelGal() < fuelConsumedGallons) {
-                debug("Vehicle " + currentVehicle.getId() + " doesn't have enough fuel to reach stop");
-                return Double.NEGATIVE_INFINITY;
-            }
-
-            if (stop instanceof OrderStop) {
-                OrderStop orderStop = (OrderStop) stop;
-                Order order = orders.get(orderStop.getEntityID());
-                
-                if (order == null) {
-                    debug("Order " + orderStop.getEntityID() + " not found in solution");
-                    return Double.NEGATIVE_INFINITY;
-                }
-                
-                // verify GLP capacity
-                if (currentVehicle.getCurrentGlpM3() - orderStop.getGlpDelivery() < 0) {
-                    debug("Vehicle " + currentVehicle.getId() + " doesn't have enough GLP for order " + order.getId());
+            // Iterate over the stops in the route
+            for (RouteStop stop : route.getStops()) {
+                int glpChange = 0;
+                Duration duration = Duration.ZERO;
+                PathResult pathResult = PathFinder.findPath(env, currentPosition, stop.getPosition(), currentTime);
+                if (pathResult == null) {
+                    debug(String.format("No path found from %s to %s", currentPosition, stop.getPosition()));
                     return Double.NEGATIVE_INFINITY;
                 }
 
-                // Check if delivery is late and apply penalty
-                if (arrivalTime.isAfter(order.getDueTime())) {
-                    Duration lateDuration = Duration.between(order.getDueTime(), arrivalTime);
-                    long lateMinutes = lateDuration.toMinutes();
-                    double orderLatePenalty = lateMinutes * LATE_DELIVERY_PENALTY_PER_MINUTE;
-                    latePenalty += orderLatePenalty;
-                    debug("Late delivery for order " + order.getId() + " by " + lateMinutes +
-                            " minutes, penalty: " + orderLatePenalty);
+                // Calculate distance and update total
+                int distance = pathResult.getDistance();
+                totalDistance += distance;
+
+                // Check fuel constraint
+                double fuelNeeded = currentVehicle.calculateFuelNeeded(distance);
+                if (fuelNeeded > currentVehicle.getCurrentFuelGal()) {
+                    debug(String.format("Vehicle %s has insufficient fuel: %f/%f", currentVehicle.getId(),
+                            currentVehicle.getCurrentFuelGal(), fuelNeeded));
+                    totalPenalty += INSUFFICIENT_FUEL_PENALTY;
+                }
+                LocalDateTime eta = pathResult.getArrivalTimes().getLast();
+                currentTime = eta;
+
+                // Process the stop
+                if (stop instanceof OrderStop) {
+                    OrderStop orderStop = (OrderStop) stop;
+                    Order order = orderStop.getOrder();
+                    int glpDelivery = orderStop.getGlpDelivery();
+
+                    if (eta.isAfter(order.getDueTime())) {
+                        totalPenalty += LATE_DELIVERY_PENALTY;
+                        debug(String.format("Late delivery for order %s by %d minutes", order.getId(),
+                                Duration.between(order.getDueTime(), eta).toMinutes()));
+                    }
+
+                    // Update the delivery map
+                    deliveryMap.put(order.getId(), deliveryMap.getOrDefault(order.getId(), 0) + glpDelivery);
+                    glpChange -= glpDelivery;
+                    duration = Duration.ofMinutes(Constants.GLP_SERVE_DURATION_MINUTES);
+                } else {
+                    DepotStop depotStop = (DepotStop) stop;
+                    int glpRecharge = depotStop.getGlpRecharge();
+
+                    // Check if depot has enough GLP
+                    String depotId = depotStop.getDepot().getId();
+                    int currentDepotGlp = depotStop.getDepot().getCurrentGlpM3();
+
+                    if (depotMap.getOrDefault(depotId, 0) + glpRecharge > currentDepotGlp) {
+                        debug(String.format("Depot %s has insufficient GLP: %d/%d", depotId, currentDepotGlp,
+                                depotMap.getOrDefault(depotId, 0) + glpRecharge));
+                        totalPenalty += DEPOT_NEGATIVE_GLP_PENALTY;
+                    }
+
+                    depotMap.put(depotId, depotMap.getOrDefault(depotId, 0) + glpRecharge);
+                    glpChange += glpRecharge;
+                    duration = Duration.ofMinutes(Constants.DEPOT_GLP_TRANSFER_TIME_MINUTES);
+
+                    // Refuel at depot if capable
+                    if (depotStop.getDepot().canRefuel()) {
+                        currentVehicle.refuel();
+                    }
                 }
 
-                // Update vehicle state
-                currentVehicle.serveOrder(order, orderStop.getGlpDelivery(), currentTime);
-                
-                // Record order delivery
-                int previousDelivery = deliveredGlpByOrderId.getOrDefault(order.getId(), 0);
-                deliveredGlpByOrderId.put(order.getId(), previousDelivery + orderStop.getGlpDelivery());
-                
-                debug("Delivered " + orderStop.getGlpDelivery() + "m³ to order " + order.getId() + 
-                      " at " + arrivalTime + " (due: " + order.getDueTime() + ")");
-            }
+                // Update current status
+                currentVehicle.setCurrentPosition(stop.getPosition());
+                currentVehicle.setCurrentGlpM3(currentVehicle.getCurrentGlpM3() + glpChange);
+                currentVehicle.consumeFuel(distance);
+                currentPosition = stop.getPosition();
+                currentTime = currentTime.plus(duration);
 
-            if (stop instanceof DepotStop) {
-                DepotStop depotStop = (DepotStop) stop;
-                
-                // Check depot capacity constraints
-                if (currentVehicle.getCurrentGlpM3() + depotStop.getGlpRecharge() > currentVehicle.getGlpCapacityM3()) {
-                    debug("Recharge at depot " + depotStop.getEntityID() + 
-                          " exceeds vehicle capacity by " + 
-                          (currentVehicle.getCurrentGlpM3() + depotStop.getGlpRecharge() - 
-                           currentVehicle.getGlpCapacityM3()) + "m³");
+                // Check GLP constraints
+                if (currentVehicle.getCurrentGlpM3() < 0
+                        || currentVehicle.getCurrentGlpM3() > currentVehicle.getGlpCapacityM3()) {
+                    debug(String.format("Vehicle %s has invalid GLP: %d/%d", currentVehicle.getId(),
+                            currentVehicle.getCurrentGlpM3(), currentVehicle.getGlpCapacityM3()));
                     return Double.NEGATIVE_INFINITY;
                 }
-                
-                // Update vehicle state
-                currentVehicle.refill(depotStop.getGlpRecharge());
-                debug("Refilled " + depotStop.getGlpRecharge() + "m³ at depot " + depotStop.getEntityID());
-            }
 
-            // Add distance cost
-            double segmentDistanceCost = distance * DISTANCE_COST_PER_KM;
-            distanceCost += segmentDistanceCost;
-            
-            // Update current position and time for next iteration
-            currentPosition = stop.getPosition();
-            currentTime = arrivalTime;
-            
-            debug("Vehicle " + currentVehicle.getId() + 
-                  " arrived at " + stop.getEntityID() + 
-                  ", fuel: " + String.format("%.2f", currentVehicle.getCurrentFuelGal()) + "gal, " + 
-                  "GLP: " + currentVehicle.getCurrentGlpM3() + "m³");
+                // Check fuel constraints
+                if (currentVehicle.getCurrentFuelGal() < 0) {
+                    debug(String.format("Vehicle %s has insufficient fuel: %f", currentVehicle.getId(),
+                            currentVehicle.getCurrentFuelGal()));
+                    return Double.NEGATIVE_INFINITY;
+                }
+            }
         }
 
-        // Calculate total route cost
-        routeCost = distanceCost + latePenalty;
-        
-        debug("Route cost breakdown - Distance cost: " + distanceCost + 
-              ", Late delivery penalty: " + latePenalty + 
-              ", Total: " + routeCost);
-        
-        return routeCost;
+        // Check if all orders were completed
+        for (Order order : env.getPendingOrders()) {
+            int glpDelivered = deliveryMap.getOrDefault(order.getId(), 0);
+            if (glpDelivered < order.getRemainingGlpM3()) {
+                totalPenalty += UNDELIVERED_ORDER_PENALTY;
+                debug(String.format("Order %s was not completed: %d/%d GLP delivered", order.getId(), glpDelivered,
+                        order.getRemainingGlpM3()));
+            }
+            if (glpDelivered > order.getRemainingGlpM3()) {
+                debug(String.format("Order %s was delivered more than remaining: %d/%d GLP delivered", order.getId(),
+                        glpDelivered, order.getRemainingGlpM3()));
+                return Double.NEGATIVE_INFINITY;
+            }
+        }
+
+        // Calculate distance cost
+        double distanceCost = totalDistance * DISTANCE_COST_PER_KM;
+
+        return -(totalPenalty + distanceCost);
     }
 }

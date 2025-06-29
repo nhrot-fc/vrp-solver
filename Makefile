@@ -47,12 +47,6 @@ test: compile
 	@$(JAVA) -cp $(BIN_DIR) $(TEST_RUNNER_CLASS)
 	@echo "Tests finalizados."
 
-# Regla para ejecutar los tests con el nuevo framework y reporte detallado
-test-detailed: compile
-	@echo "Ejecutando tests con el framework con reporte detallado..."
-	@$(JAVA) -cp $(BIN_DIR) $(TEST_RUNNER_CLASS) --detailed
-	@echo "Tests finalizados."
-
 # Regla para limpiar los archivos generados
 clean:
 	@echo "Limpiando directorio de salida: $(BIN_DIR)..."
