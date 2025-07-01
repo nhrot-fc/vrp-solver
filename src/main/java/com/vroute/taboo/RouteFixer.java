@@ -3,6 +3,7 @@ package com.vroute.taboo;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.vroute.models.Constants;
 import com.vroute.models.Depot;
@@ -23,30 +24,120 @@ public class RouteFixer {
         }
     }
 
+    public static Route fixRoute(Environment env, List<OrderStop> orderStops, Vehicle vehicle, LocalDateTime starTime) {
+        List<RouteStop> finalRoute = new ArrayList<>();
+       
+        Vehicle currentVehicle = vehicle.clone();
+        LocalDateTime currentTime = starTime;
+        
+        for(OrderStop os: orderStops) {
+            if(os.getGlpDelivery() > vehicle.getGlpCapacityM3()) {
+                debug(String.format("%s is impossible to serve: glp needed %d, vehicle capacity %d", os.getOrder().getId(), os.getGlpDelivery(), vehicle.getGlpCapacityM3()));
+                return null;
+            }
+            // Case: Vehicle has not enough GLP to attend OrderStop
+            // vehicle.currentPosition -> depot
+            if (currentVehicle.getCurrentGlpM3() < os.getGlpDelivery()) {
+                // Find nearest depot with enough GLP
+                int glpNeeded = currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3();
+                Depot glpDepot = findNearestGLPSource(env, currentVehicle.getCurrentPosition(), glpNeeded, currentTime);
+                
+                if (glpDepot == null) {
+                    debug("No depot with enough GLP found");
+                    return null;
+                }
+                
+                // Travel to the depot
+                TravelResult travelToDepot = driveTo(currentVehicle.getCurrentPosition(), 
+                                                   new DepotStop(glpDepot, glpNeeded), 
+                                                   currentTime, 
+                                                   env, 
+                                                   currentVehicle);
+                
+                if (travelToDepot == null) {
+                    debug("Impossible to travel to depot");
+                    return null;
+                }
+                
+                // Update vehicle state after reaching depot
+                currentVehicle = travelToDepot.getUpdatedVehicle();
+                currentTime = travelToDepot.getEta().plusMinutes(Constants.DEPOT_GLP_TRANSFER_TIME_MINUTES);
+                
+                // Refill GLP at depot
+                currentVehicle.refill(glpNeeded);
+                
+                // Add depot stop to route
+                finalRoute.addAll(travelToDepot.getVisitedStops());
+                
+                // Now travel from depot to order
+                TravelResult travelToOrder = driveTo(currentVehicle.getCurrentPosition(), 
+                                                   os, 
+                                                   currentTime, 
+                                                   env, 
+                                                   currentVehicle);
+                
+                if (travelToOrder == null) {
+                    debug("Impossible to travel from depot to order");
+                    return null;
+                }
+                
+                // Update vehicle state after serving order
+                currentVehicle = travelToOrder.getUpdatedVehicle();
+                currentVehicle.setCurrentGlpM3(currentVehicle.getCurrentGlpM3() - os.getGlpDelivery());
+                currentTime = travelToOrder.getEta().plusMinutes(Constants.GLP_SERVE_DURATION_MINUTES);
+                
+                // Add order stop to route
+                OrderStop newOs = new OrderStop(os.getOrder(), os.getOrder().getPosition(), os.getGlpDelivery());
+                newOs.setPath(travelToOrder.getVisitedStops().getLast().getPath());
+                finalRoute.add(newOs);
+            }
+            // Vehicle has enough GLP to attend OrderStop
+            // vehicle.currentPsition -> os
+            else if (currentVehicle.getCurrentGlpM3() >= os.getGlpDelivery()) {
+                // drive to order stop. serve. add orderstop
+                TravelResult travel = driveTo(currentVehicle.getCurrentPosition(), os, currentTime, env, currentVehicle);
+                if (travel == null) {
+                    debug("Impossible to travel");
+                    return null;
+                }
+                currentVehicle = travel.getUpdatedVehicle();
+                currentVehicle.setCurrentGlpM3(currentVehicle.getCurrentGlpM3() - os.getGlpDelivery());
+                currentTime = travel.getEta().plusMinutes(Constants.GLP_SERVE_DURATION_MINUTES);
+                OrderStop newOs = new OrderStop(os.getOrder(), os.getOrder().getPosition(), os.getGlpDelivery());
+                newOs.setPath(travel.getVisitedStops().getLast().getPath());
+                finalRoute.add(newOs);
+            }
+        }
+
+        // Add main depot travel
+        DepotStop depotStop = new DepotStop(env.getMainDepot(), 0);
+        TravelResult travelToDepot = driveTo(currentVehicle.getCurrentPosition(), depotStop, currentTime, env, currentVehicle);
+        if (travelToDepot == null) {
+            debug("Impossible to travel to depot");
+            return null;
+        }
+        currentVehicle = travelToDepot.getUpdatedVehicle();
+        currentTime = travelToDepot.getEta();
+        finalRoute.addAll(travelToDepot.getVisitedStops());
+        return new Route(vehicle, finalRoute, starTime);
+    }
     private static class TravelResult {
-        private final List<DepotStop> visitedDepots;
+        private final List<RouteStop> visitedStops;
         private final Vehicle updatedVehicle;
-        private final Position destination;
         private final LocalDateTime eta;
 
-        public TravelResult(List<DepotStop> visitedDepots, Vehicle updatedVehicle, Position destination,
-                LocalDateTime eta) {
-            this.visitedDepots = visitedDepots;
+        public TravelResult(List<RouteStop> visitedStops, Vehicle updatedVehicle, LocalDateTime eta) {
+            this.visitedStops = visitedStops;
             this.updatedVehicle = updatedVehicle;
-            this.destination = destination;
             this.eta = eta;
         }
 
-        public List<DepotStop> getVisitedDepots() {
-            return visitedDepots;
+        public List<RouteStop> getVisitedStops() {
+            return visitedStops;
         }
 
         public Vehicle getUpdatedVehicle() {
             return updatedVehicle;
-        }
-
-        public Position getDestination() {
-            return destination;
         }
 
         public LocalDateTime getEta() {
@@ -54,212 +145,136 @@ public class RouteFixer {
         }
     }
 
-    public static TravelResult driveTo(Environment env, Vehicle vehicle, Position destination,
-            LocalDateTime currentTime) {
-        // Preparar resultado
-        List<DepotStop> visitedDepots = new ArrayList<>();
-        Vehicle updatedVehicle = vehicle.clone();
-        Position currentPosition = updatedVehicle.getCurrentPosition();
-        LocalDateTime eta = currentTime;
-
-        // Si ya está en el destino, retornar inmediatamente
-        if (currentPosition.equals(destination)) {
-            return new TravelResult(visitedDepots, updatedVehicle, destination, eta);
+    private static TravelResult driveTo(Position from, RouteStop to, LocalDateTime starTime, Environment env, Vehicle vehicle) {
+        if(from.equals(to.getPosition())) {
+            return new TravelResult(List.of(to), vehicle, starTime);
         }
 
-        // Iteramos hasta que lleguemos al destino o determinemos que no es posible
-        while (!currentPosition.equals(destination)) {
-            // Calcular ruta directa al destino
-            PathResult pathResult = PathFinder.findPath(env, currentPosition, destination, eta);
-            if (pathResult == null) {
-                debug("No se encontró ruta desde " + currentPosition + " hasta " + destination);
-                return null; // No hay ruta posible
-            }
+        PathResult path = PathFinder.findPath(env, from, to.getPosition(), starTime);
+        if (path == null) {
+            debug(String.format("No path found from %s to %s", from, to.getPosition()));
+            return null;
+        }
+        int distanceKm = path.getDistance();
+        double fuelNeeded = vehicle.calculateFuelNeeded(distanceKm);
+        // Case 1: Enough fuel to reach destination
+        if ((vehicle.getCurrentFuelGal() - fuelNeeded > 0) || (Math.abs(vehicle.getCurrentFuelGal() - fuelNeeded) < 0.001)) {
+            Vehicle currentVehicle = vehicle.clone();
+            currentVehicle.consumeFuelFromDistance(distanceKm);
+            currentVehicle.setCurrentPosition(to.getPosition());
+            RouteStop destination = to.clone();
+            destination.setPath(path.getPath());
 
-            // Verificar si hay suficiente combustible para el viaje directo
-            int distance = pathResult.getDistance();
-            double fuelNeeded = updatedVehicle.calculateFuelNeeded(distance);
-
-            if (updatedVehicle.getCurrentFuelGal() >= fuelNeeded) {
-                // Hay suficiente combustible para ir directamente al destino
-                updatedVehicle.consumeFuel(distance);
-                updatedVehicle.setCurrentPosition(destination);
-
-                // Actualizar la hora de llegada
-                eta = pathResult.getArrivalTimes().get(pathResult.getArrivalTimes().size() - 1);
-                currentPosition = destination;
-
-                break; // Terminamos el bucle, ya llegamos al destino
-            }
-            // No hay suficiente combustible, necesitamos repostar
-
-            // Buscar depósito de combustible más cercano
-            Depot fuelDepot = findFuelSource(env, currentPosition, eta);
-            if (fuelDepot == null) {
-                debug("No se encontró depósito de combustible alcanzable");
-                return null; // No hay depósito de combustible alcanzable
-            }
-
-            // Calcular ruta al depósito
-            PathResult depotPathResult = PathFinder.findPath(env, currentPosition, fuelDepot.getPosition(), eta);
-            if (depotPathResult == null) {
-                debug("No se encontró ruta al depósito de combustible");
-                return null; // No hay ruta al depósito
-            }
-
-            // Verificar si podemos llegar al depósito con el combustible actual
-            int depotDistance = depotPathResult.getDistance();
-            double fuelNeededToDepot = updatedVehicle.calculateFuelNeeded(depotDistance);
-
-            if (updatedVehicle.getCurrentFuelGal() < fuelNeededToDepot) {
-                debug("No hay suficiente combustible para llegar al depósito más cercano");
-                return null; // No podemos ni llegar al depósito
-            }
-
-            // Viajamos al depósito
-            updatedVehicle.consumeFuel(depotDistance);
-            updatedVehicle.setCurrentPosition(fuelDepot.getPosition());
-
-            // Actualizar tiempo y posición
-            eta = depotPathResult.getArrivalTimes().get(depotPathResult.getArrivalTimes().size() - 1);
-            currentPosition = fuelDepot.getPosition();
-
-            // Repostar en el depósito
-            updatedVehicle.refuel();
-
-            // Registrar depósito visitado
-            visitedDepots.add(new DepotStop(fuelDepot, 0)); // El 0 indica que solo repostamos combustible
-
+            LocalDateTime eta = path.getArrivalTimes().getLast();
+            return new TravelResult(List.of(destination), currentVehicle, eta);
         }
 
-        return new TravelResult(visitedDepots, updatedVehicle, destination, eta);
-    }
-
-    public static Route fixRoute(Environment env, List<OrderStop> orderStops, Vehicle vehicle,
-            LocalDateTime startTime) {
-        // Trabajar con una copia del vehículo para simulación
-        Vehicle vehicleClone = vehicle.clone();
-        Position currentPosition = vehicleClone.getCurrentPosition();
-        LocalDateTime currentTime = startTime;
-        List<RouteStop> routeStops = new ArrayList<>();
-
-        // Procesar cada pedido de la ruta
-        for (OrderStop orderStop : orderStops) {
-            if (orderStop.getGlpDelivery() > vehicleClone.getGlpCapacityM3()) {
-                debug("La orden " + orderStop.getOrder().getId()
-                        + " requiere más GLP que el vehículo puede transportar");
-                return null;
-            }
-
-            // Paso 1: Verificar si necesitamos recargar GLP
-            if (vehicleClone.getCurrentGlpM3() < orderStop.getGlpDelivery()) {
-                // Calcular cuánto GLP necesitamos recargar
-                int glpToRefill = vehicleClone.getGlpCapacityM3() - vehicleClone.getCurrentGlpM3();
-
-                // Buscar un depósito con suficiente GLP
-                Depot depot = findGLPSource(env, glpToRefill, currentPosition, currentTime);
-                if (depot == null) {
-                    debug("No se encontró depósito con suficiente GLP");
-                    return null;
-                }
-
-                // Viajar al depósito (incluye paradas de combustible si son necesarias)
-                TravelResult travelToDepot = driveTo(env, vehicleClone, depot.getPosition(), currentTime);
-                if (travelToDepot == null) {
-                    debug("No se pudo calcular ruta al depósito");
-                    return null;
-                }
-
-                // Actualizar estado después del viaje al depósito
-                currentTime = travelToDepot.getEta();
-                currentPosition = travelToDepot.getDestination();
-                vehicleClone = travelToDepot.getUpdatedVehicle();
-
-                // Añadir paradas intermedias (si hubo repostaje de combustible)
-                routeStops.addAll(travelToDepot.getVisitedDepots());
-
-                // Recargar GLP
-                vehicleClone.refill(glpToRefill);
-                if (depot.canRefuel()) {
-                    vehicleClone.refuel();
-                }
-
-                // Registrar la parada en el depósito de GLP
-                routeStops.add(new DepotStop(depot, glpToRefill));
-            }
-
-            // Paso 2: Viajar al punto de la orden
-            TravelResult travelToOrder = driveTo(env, vehicleClone, orderStop.getPosition(), currentTime);
-            if (travelToOrder == null) {
-                debug("No se pudo calcular ruta a la orden");
-                return null;
-            }
-
-            // Actualizar estado después del viaje
-            currentTime = travelToOrder.getEta();
-            currentPosition = travelToOrder.getDestination();
-            vehicleClone = travelToOrder.getUpdatedVehicle();
-
-            // Añadir paradas intermedias (si hubo repostaje)
-            routeStops.addAll(travelToOrder.getVisitedDepots());
-
-            // Dispensar GLP
-            vehicleClone.dispenseGlp(orderStop.getGlpDelivery());
-
-            // Registrar la entrega de la orden
-            routeStops.add(new OrderStop(orderStop.getOrder(), orderStop.getPosition(), orderStop.getGlpDelivery()));
-        }
-
-        // travel to main depot
-        TravelResult travelToMainDepot = driveTo(env, vehicleClone, env.getMainDepot().getPosition(), currentTime);
-        if (travelToMainDepot == null) {
-            debug("No se pudo calcular ruta al depósito principal");
+        // Case 2: Not enough fuel need intermediate depot to refuel
+        Depot fuelDepot = findNearestFuelSource(env, from, starTime);
+        if (fuelDepot == null) {
+            debug("No fuel depot found");
             return null;
         }
 
-        // add main depot stop
-        routeStops.addAll(travelToMainDepot.getVisitedDepots());
-
-        // add depot stop
-        routeStops.add(new DepotStop(env.getMainDepot(), 0));
-
-        return new Route(vehicle, routeStops, startTime);
-    }
-
-    public static Depot findGLPSource(Environment env, int glpRequest, Position position, LocalDateTime currentTime) {
-        List<Depot> depots = new ArrayList<>(env.getDepots());
-        depots.removeIf(depot -> depot.getCurrentGlpM3() < glpRequest);
-        Depot nearestDepot = findNearestDepot(env, depots, position, currentTime);
-        return nearestDepot;
-    }
-
-    public static Depot findFuelSource(Environment env, Position position, LocalDateTime currentTime) {
-        List<Depot> depots = new ArrayList<>(env.getDepots());
-        depots.removeIf(depot -> !depot.canRefuel());
-        Depot nearestDepot = findNearestDepot(env, depots, position, currentTime);
-        return nearestDepot;
-    }
-
-    public static Depot findNearestDepot(Environment env, List<Depot> depots, Position position,
-            LocalDateTime currentTime) {
-        if (depots.isEmpty()) {
+        PathResult fuelPath = PathFinder.findPath(env, from, fuelDepot.getPosition(), starTime);
+        if (fuelPath == null) {
+            debug(String.format("No path found from %s to fuel depot at %s", from, fuelDepot.getPosition()));
             return null;
         }
 
-        Depot bestDepot = null;
-        double bestDistance = Double.MAX_VALUE;
+        distanceKm = fuelPath.getDistance();
+        fuelNeeded = vehicle.calculateFuelNeeded(distanceKm);
+        
+        // Case 2.1: Cannot reach fuel depot
+        if (fuelNeeded > vehicle.getCurrentFuelGal()) {
+            debug(String.format("Not enough fuel to reach depot: needed %f, have %f", fuelNeeded, vehicle.getCurrentFuelGal()));
+            return null;
+        }
+        
+        // Case 2.2: Can reach [from -> depot]
+        Vehicle vehicleAtDepot = vehicle.clone();
+        vehicleAtDepot.consumeFuelFromDistance(distanceKm);
+        vehicleAtDepot.setCurrentPosition(fuelDepot.getPosition());
+        vehicleAtDepot.refuel();
+        
+        // Create depot stop
+        DepotStop depotStop = new DepotStop(fuelDepot, 0);
+        depotStop.setPath(fuelPath.getPath());
+        
+        LocalDateTime arrivalAtDepot = fuelPath.getArrivalTimes().getLast();
+        LocalDateTime departureFromDepot = arrivalAtDepot.plusMinutes(Constants.REFUEL_DURATION_MINUTES);
+        
+        // After refuel verify if original destination is reachable
+        PathResult pathFromDepot = PathFinder.findPath(env, fuelDepot.getPosition(), to.getPosition(), departureFromDepot);
+        if (pathFromDepot == null) {
+            debug(String.format("No path found from depot at %s to destination %s", fuelDepot.getPosition(), to.getPosition()));
+            return null;
+        }
+        
+        int distanceFromDepotKm = pathFromDepot.getDistance();
+        double fuelNeededFromDepot = vehicleAtDepot.calculateFuelNeeded(distanceFromDepotKm);
+        
+        // Check if we have enough fuel after refueling
+        if (fuelNeededFromDepot > vehicleAtDepot.getCurrentFuelGal()) {
+            debug(String.format("Not enough fuel after refueling to reach destination: needed %f, have %f", 
+                    fuelNeededFromDepot, vehicleAtDepot.getCurrentFuelGal()));
+            return null;
+        }
+        
+        // Can reach [depot -> original destination]
+        vehicleAtDepot.consumeFuelFromDistance(distanceFromDepotKm);
+        vehicleAtDepot.setCurrentPosition(to.getPosition());
+        
+        RouteStop destination = to.clone();
+        destination.setPath(pathFromDepot.getPath());
+        
+        LocalDateTime finalEta = pathFromDepot.getArrivalTimes().getLast();
+        
+        // Return the complete travel result with both stops
+        List<RouteStop> stops = new ArrayList<>();
+        stops.add(depotStop);
+        stops.add(destination);
+        
+        return new TravelResult(stops, vehicleAtDepot, finalEta);
+    }
 
-        for (Depot depot : depots) {
-            PathResult pathResult = PathFinder.findPath(env, position, depot.getPosition(), currentTime);
-
-            if (pathResult != null) {
-                if (pathResult.getDistance() < bestDistance) {
-                    bestDistance = pathResult.getDistance();
-                    bestDepot = depot;
-                }
+    private static Depot findNearestFuelSource(Environment env, Position pos, LocalDateTime time) {
+        List<Depot> fuelDepots = env.getDepots().stream()
+                .filter(Depot::canRefuel)
+                .collect(Collectors.toList());
+        
+        return findNearestDepot(env, pos, fuelDepots, time);
+    }
+    
+    private static Depot findNearestGLPSource(Environment env, Position pos, int glpDemand, LocalDateTime time) {
+        List<Depot> glpDepots = env.getDepots().stream()
+                .filter(d -> d.getCurrentGlpM3() >= glpDemand)
+                .collect(Collectors.toList());
+        
+        return findNearestDepot(env, pos, glpDepots, time);
+    }
+    
+    private static Depot findNearestDepot(Environment env, Position pos, List<Depot> candidates, LocalDateTime time) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        
+        Depot nearest = null;
+        PathResult shortestPath = null;
+        
+        for (Depot depot : candidates) {
+            PathResult path = PathFinder.findPath(env, pos, depot.getPosition(), time);
+            if (path == null) {
+                continue;
+            }
+            if (shortestPath == null || path.getDistance() < shortestPath.getDistance()) {
+                shortestPath = path;
+                nearest = depot;
             }
         }
 
-        return bestDepot;
-    }    
+        if (nearest == null) return env.getMainDepot();
+
+        return nearest;
+    }
 }

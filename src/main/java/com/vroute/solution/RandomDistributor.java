@@ -15,8 +15,6 @@ import com.vroute.models.Vehicle;
 import com.vroute.taboo.RouteFixer;
 
 public class RandomDistributor implements Solver {
-
-    private static final int[] GLP_DELIVERY_OPTIONS = { 5, 10, 15, 20, 25 };
     private final Random random = new Random();
 
     private void debug(String message) {
@@ -63,7 +61,7 @@ public class RandomDistributor implements Solver {
                 int randomVehicleIndex = random.nextInt(availableVehicles.size());
                 Vehicle vehicle = availableVehicles.get(randomVehicleIndex);
 
-                int glpDelivery = GLP_DELIVERY_OPTIONS[random.nextInt(GLP_DELIVERY_OPTIONS.length)];
+                int glpDelivery = 5;
                 glpDelivery = Math.min(glpDelivery, vehicle.getGlpCapacityM3());
                 glpDelivery = Math.min(glpDelivery, remainingRequest);
                 remainingRequest -= glpDelivery;

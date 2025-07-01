@@ -5,10 +5,8 @@ import com.vroute.models.Vehicle;
 import com.vroute.models.VehicleType;
 import com.vroute.models.Position;
 import com.vroute.models.Blockage;
+import com.vroute.models.Constants;
 import com.vroute.models.Maintenance;
-import com.vroute.models.Incident;
-import com.vroute.models.IncidentType;
-import com.vroute.models.Shift;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -25,49 +23,43 @@ import java.util.regex.Pattern;
 import java.time.Year;
 
 public class DataReader {
-    // Formatters for parsing dates and times from different file formats
     private static final DateTimeFormatter DATE_FORMAT_YMD = DateTimeFormatter.ofPattern("yyyyMMdd");
-    // Removed unused formatter
-    
-    // Placeholder for base path if needed, or pass full paths to methods
-    // private String basePath = "path/to/your/data/files/";
 
+    /**
+     * Loads vehicles for the simulation environment
+     */
     public List<Vehicle> loadVehicles(String filePath) {
         List<Vehicle> vehicles = new ArrayList<>();
-        // According to the README, vehicle definitions are fixed.
-        // This method could initialize them based on the README's table.
-        // TTNN (TT = Type, NN = Correlative. Ej: TA01, TD10)
-
         // TA: 2 units
-        vehicles.add(new Vehicle("TA01", VehicleType.TA, new Position(12, 8))); // Assuming starting at main depot
-        vehicles.add(new Vehicle("TA02", VehicleType.TA, new Position(12, 8)));
+        for (int i = 1; i <= 2; i++) {
+            vehicles.add(new Vehicle(String.format("TA%02d", i), VehicleType.TA, Constants.CENTRAL_STORAGE_LOCATION));
+        }
         // TB: 4 units
-        vehicles.add(new Vehicle("TB01", VehicleType.TB, new Position(12, 8)));
-        vehicles.add(new Vehicle("TB02", VehicleType.TB, new Position(12, 8)));
-        vehicles.add(new Vehicle("TB03", VehicleType.TB, new Position(12, 8)));
-        vehicles.add(new Vehicle("TB04", VehicleType.TB, new Position(12, 8)));
+        for (int i = 1; i <= 4; i++) {
+            vehicles.add(new Vehicle(String.format("TB%02d", i), VehicleType.TB, Constants.CENTRAL_STORAGE_LOCATION));
+        }
         // TC: 4 units
-        vehicles.add(new Vehicle("TC01", VehicleType.TC, new Position(12, 8)));
-        vehicles.add(new Vehicle("TC02", VehicleType.TC, new Position(12, 8)));
-        vehicles.add(new Vehicle("TC03", VehicleType.TC, new Position(12, 8)));
-        vehicles.add(new Vehicle("TC04", VehicleType.TC, new Position(12, 8)));
+        for (int i = 1; i <= 4; i++) {
+            vehicles.add(new Vehicle(String.format("TC%02d", i), VehicleType.TC, Constants.CENTRAL_STORAGE_LOCATION));
+        }
         // TD: 10 units
         for (int i = 1; i <= 10; i++) {
-            vehicles.add(new Vehicle(String.format("TD%02d", i), VehicleType.TD, new Position(12, 8)));
+            vehicles.add(new Vehicle(String.format("TD%02d", i), VehicleType.TD, Constants.CENTRAL_STORAGE_LOCATION));
         }
-        // If a specific file format for vehicles is provided later, this method can be updated.
         return vehicles;
     }
 
-    public List<Order> loadOrders(String filePath, LocalDateTime startDate, int durationHours, int maxOrders) {
-        List<Order> orders = new ArrayList<>();
+    /**
+     * Creates order events based on data from the file
+     */
+    public List<Event> createOrderEvents(String filePath, LocalDateTime startDate, LocalDateTime endDate) {
+        List<Event> orderEvents = new ArrayList<>();
         Pattern orderPattern = Pattern.compile("(\\d{2}d\\d{2}h\\d{2}m):(\\d+),(\\d+),([^,]+),(\\d+)m3,(\\d+)h");
         // Example: 11d13h31m:45,43,c-167,9m3,36h
 
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
-            int ordersLoaded = 0;
-            while ((line = br.readLine()) != null && (maxOrders <= 0 || ordersLoaded < maxOrders)) {
+            while ((line = br.readLine()) != null) {
                 Matcher matcher = orderPattern.matcher(line);
                 if (matcher.matches()) {
                     try {
@@ -78,17 +70,11 @@ public class DataReader {
                         int m3 = Integer.parseInt(matcher.group(5));
                         int limitHours = Integer.parseInt(matcher.group(6));
 
-                        // Assuming the day in "##d##h##m" refers to day of the month of the file.
-                        // The year and month come from the file name e.g., ventas2025mm
-                        // For simplicity, we'll need to parse year/month from filePath or pass it.
-                        // Let's assume startDate already has the correct year and month for parsing ##d.
-                        // This part needs refinement based on how year/month are determined for orders.
-                        // For now, we'll construct LocalDateTime using startDate's year/month and parsed day.
-                        
                         // Extract day, hour, minute from arrivalStr
                         Pattern dayHourMinutePattern = Pattern.compile("(\\d{2})d(\\d{2})h(\\d{2})m");
                         Matcher dhmMatcher = dayHourMinutePattern.matcher(arrivalStr);
-                        if (!dhmMatcher.matches()) continue;
+                        if (!dhmMatcher.matches())
+                            continue;
 
                         int day = Integer.parseInt(dhmMatcher.group(1));
                         int hour = Integer.parseInt(dhmMatcher.group(2));
@@ -108,14 +94,15 @@ public class DataReader {
                         LocalDateTime arrivalDateTime = LocalDateTime.of(year, month, day, hour, minute);
                         LocalDateTime dueDateTime = arrivalDateTime.plusHours(limitHours);
 
-                        if (!arrivalDateTime.isBefore(startDate) && 
-                            (durationHours <= 0 || arrivalDateTime.isBefore(startDate.plusHours(durationHours)))) {
+                        // Check if order is within the simulation timeframe
+                        if (!arrivalDateTime.isBefore(startDate) && !arrivalDateTime.isAfter(endDate)) {
                             Position clientPosition = new Position(posX, posY);
-                            Order order = new Order(clientId + "_" + arrivalStr, arrivalDateTime, dueDateTime, m3, clientPosition);
-                            orders.add(order);
-                            if (maxOrders > 0) {
-                                ordersLoaded++;
-                            }
+                            Order order = new Order(clientId + "_" + arrivalStr, arrivalDateTime, dueDateTime, m3,
+                                    clientPosition);
+                            
+                            // Create an order arrival event
+                            Event orderEvent = new Event(EventType.ORDER_ARRIVAL, arrivalDateTime, order);
+                            orderEvents.add(orderEvent);
                         }
                     } catch (DateTimeParseException | NumberFormatException e) {
                         System.err.println("Error parsing order line: " + line + " - " + e.getMessage());
@@ -125,29 +112,22 @@ public class DataReader {
         } catch (IOException e) {
             System.err.println("Error reading orders file: " + filePath + " - " + e.getMessage());
         }
-        return orders;
+        return orderEvents;
     }
 
     /**
-     * Loads street blockages from a file based on time period and maximum count
-     * 
-     * @param filePath Path to the blockages file (format: aaaamm.bloqueadas)
-     * @param startDate The reference start date/time
-     * @param durationHours Duration in hours to load blockages for (0 for unlimited)
-     * @param maxBlockages Maximum number of blockages to load (0 for unlimited)
-     * @return List of Blockage objects
+     * Creates blockage events based on data from the file
      */
-    public List<Blockage> loadBlockages(String filePath, LocalDateTime startDate, int durationHours, int maxBlockages) {
-        List<Blockage> blockages = new ArrayList<>();
+    public List<Event> createBlockageEvents(String filePath, LocalDateTime startDate, LocalDateTime endDate) {
+        List<Event> blockageEvents = new ArrayList<>();
         // Pattern: ##d##h##m-##d##h##m:x1,y1,x2,y2,...,xn,yn
         // Example: 01d06h00m-01d15h00m:31,21,34,21
         Pattern blockagePattern = Pattern.compile("(\\d{2}d\\d{2}h\\d{2}m)-(\\d{2}d\\d{2}h\\d{2}m):([\\d,]+)");
         
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
-            int blockagesLoaded = 0;
             
-            while ((line = br.readLine()) != null && (maxBlockages <= 0 || blockagesLoaded < maxBlockages)) {
+            while ((line = br.readLine()) != null) {
                 Matcher matcher = blockagePattern.matcher(line);
                 
                 if (matcher.matches()) {
@@ -160,14 +140,15 @@ public class DataReader {
                         LocalDateTime blockageStart = parseTimeFromDMH(startTimeStr, startDate);
                         LocalDateTime blockageEnd = parseTimeFromDMH(endTimeStr, startDate);
                         
-                        // Check if the blockage is within our time window
-                        if (isTimeInInterval(blockageStart, blockageEnd, startDate, durationHours)) {
+                        // Check if the blockage overlaps with the simulation timeframe
+                        if (!(blockageEnd.isBefore(startDate) || blockageStart.isAfter(endDate))) {
                             // Parse blockage points
                             String[] coords = pointsStr.split(",");
                             List<Position> blockagePoints = new ArrayList<>();
                             
                             for (int i = 0; i < coords.length; i += 2) {
-                                if (i + 1 >= coords.length) break; // Avoid potential IndexOutOfBounds
+                                if (i + 1 >= coords.length)
+                                    break; // Avoid potential IndexOutOfBounds
                                 
                                 int x = Integer.parseInt(coords[i]);
                                 int y = Integer.parseInt(coords[i + 1]);
@@ -175,10 +156,16 @@ public class DataReader {
                             }
                             
                             if (blockagePoints.size() >= 2) { // Need at least two points to form a path
-                                blockages.add(new Blockage(blockageStart, blockageEnd, blockagePoints));
-                                if (maxBlockages > 0) {
-                                    blockagesLoaded++;
-                                }
+                                // Create the blockage object
+                                Blockage blockage = new Blockage(blockageStart, blockageEnd, blockagePoints);
+                                
+                                // Create a blockage start event
+                                Event startEvent = new Event(EventType.BLOCKAGE_START, blockageStart, blockage);
+                                blockageEvents.add(startEvent);
+                                
+                                // Also create a blockage end event
+                                Event endEvent = new Event(EventType.BLOCKAGE_END, blockageEnd, blockage);
+                                blockageEvents.add(endEvent);
                             }
                         }
                     } catch (DateTimeParseException | NumberFormatException e) {
@@ -190,29 +177,22 @@ public class DataReader {
             System.err.println("Error reading blockages file: " + filePath + " - " + e.getMessage());
         }
         
-        return blockages;
+        return blockageEvents;
     }
     
     /**
-     * Loads maintenance tasks from a file based on time period and maximum count
-     * 
-     * @param filePath Path to the maintenance file (mantpreventivo)
-     * @param startDate The reference start date/time
-     * @param durationDays Duration in days to load maintenance tasks for (0 for unlimited)
-     * @param maxTasks Maximum number of tasks to load (0 for unlimited)
-     * @return List of MaintenanceTask objects
+     * Creates maintenance events based on data from the file
      */
-    public List<Maintenance> loadMaintenanceSchedule(String filePath, LocalDateTime startDate, int durationDays, int maxTasks) {
-        List<Maintenance> tasks = new ArrayList<>();
+    public List<Event> createMaintenanceEvents(String filePath, LocalDateTime startDate, LocalDateTime endDate) {
+        List<Event> maintenanceEvents = new ArrayList<>();
         // Pattern: aaaammdd:TTNN
         // Example: 20250401:TA01
         Pattern maintenancePattern = Pattern.compile("(\\d{8}):(\\w{4})");
         
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String line;
-            int tasksLoaded = 0;
             
-            while ((line = br.readLine()) != null && (maxTasks <= 0 || tasksLoaded < maxTasks)) {
+            while ((line = br.readLine()) != null) {
                 Matcher matcher = maintenancePattern.matcher(line);
                 
                 if (matcher.matches()) {
@@ -225,14 +205,14 @@ public class DataReader {
                         LocalDateTime maintenanceDateTime = LocalDateTime.of(maintenanceDate, LocalTime.MIDNIGHT);
                         
                         // Check if the maintenance is within our time window
-                        if (!maintenanceDateTime.isBefore(startDate) && 
-                            (durationDays <= 0 || maintenanceDateTime.isBefore(startDate.plusDays(durationDays)))) {
+                        if (!maintenanceDateTime.isBefore(startDate) && !maintenanceDateTime.isAfter(endDate)) {
                             
-                            tasks.add(new Maintenance(vehicleId, maintenanceDate));
+                            // Create maintenance object
+                            Maintenance maintenance = new Maintenance(vehicleId, maintenanceDate);
                             
-                            if (maxTasks > 0) {
-                                tasksLoaded++;
-                            }
+                            // Create maintenance event
+                            Event maintenanceEvent = new Event(EventType.MAINTENANCE, maintenanceDateTime, maintenance);
+                            maintenanceEvents.add(maintenanceEvent);
                         }
                     } catch (DateTimeParseException e) {
                         System.err.println("Error parsing maintenance line: " + line + " - " + e.getMessage());
@@ -243,77 +223,30 @@ public class DataReader {
             System.err.println("Error reading maintenance file: " + filePath + " - " + e.getMessage());
         }
         
-        return tasks;
+        return maintenanceEvents;
     }
-    
+
     /**
-     * Loads potential vehicle incidents from a file
-     * 
-     * @param filePath Path to the incidents file (averias.txt)
-     * @param maxIncidents Maximum number of incidents to load (0 for unlimited)
-     * @return List of Incident objects
+     * Creates scheduled refill events for depots
      */
-    public List<Incident> loadIncidents(String filePath, int maxIncidents) {
-        List<Incident> incidents = new ArrayList<>();
-        // Pattern: tt_######_ti
-        // Example: T1_TA01_TI2
-        Pattern incidentPattern = Pattern.compile("(T\\d)_(\\w{4})_(TI\\d)");
+    public List<Event> createDepotRefillEvents(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Event> refillEvents = new ArrayList<>();
         
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            int incidentsLoaded = 0;
+        // Schedule daily refills at midnight
+        LocalDateTime currentDay = startDate.withHour(0).withMinute(0).withSecond(0);
+        
+        while (!currentDay.isAfter(endDate)) {
+            // Create a refill event at midnight each day
+            Event refillEvent = new Event(EventType.GLP_DEPOT_REFILL, currentDay, null);
+            refillEvents.add(refillEvent);
             
-            while ((line = br.readLine()) != null && (maxIncidents <= 0 || incidentsLoaded < maxIncidents)) {
-                Matcher matcher = incidentPattern.matcher(line);
-                
-                if (matcher.matches()) {
-                    try {
-                        String shiftStr = matcher.group(1);
-                        String vehicleId = matcher.group(2);
-                        String incidentTypeStr = matcher.group(3);
-                        
-                        // Parse shift
-                        Shift shift;
-                        switch (shiftStr) {
-                            case "T1": shift = Shift.T1; break;
-                            case "T2": shift = Shift.T2; break;
-                            case "T3": shift = Shift.T3; break;
-                            default: throw new IllegalArgumentException("Invalid shift: " + shiftStr);
-                        }
-                        
-                        // Parse incident type
-                        IncidentType incidentType;
-                        switch (incidentTypeStr) {
-                            case "TI1": incidentType = IncidentType.TI1; break;
-                            case "TI2": incidentType = IncidentType.TI2; break;
-                            case "TI3": incidentType = IncidentType.TI3; break;
-                            default: throw new IllegalArgumentException("Invalid incident type: " + incidentTypeStr);
-                        }
-                        
-                        incidents.add(new Incident(vehicleId, incidentType, shift));
-                        
-                        if (maxIncidents > 0) {
-                            incidentsLoaded++;
-                        }
-                    } catch (IllegalArgumentException e) {
-                        System.err.println("Error parsing incident line: " + line + " - " + e.getMessage());
-                    }
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Error reading incidents file: " + filePath + " - " + e.getMessage());
+            // Move to next day
+            currentDay = currentDay.plusDays(1);
         }
         
-        return incidents;
+        return refillEvents;
     }
     
-    /**
-     * Helper method to parse a time string in the format ##d##h##m into a LocalDateTime
-     * 
-     * @param timeStr The time string to parse
-     * @param referenceDate The reference date to use for year and month
-     * @return The parsed LocalDateTime
-     */
     private LocalDateTime parseTimeFromDMH(String timeStr, LocalDateTime referenceDate) {
         Pattern dayHourMinutePattern = Pattern.compile("(\\d{2})d(\\d{2})h(\\d{2})m");
         Matcher dhmMatcher = dayHourMinutePattern.matcher(timeStr);
@@ -330,24 +263,23 @@ public class DataReader {
     }
     
     /**
-     * Helper method to check if a time interval overlaps with our reference time window
-     * 
-     * @param intervalStart The start of the interval to check
-     * @param intervalEnd The end of the interval to check
-     * @param referenceStart The start of our reference window
-     * @param durationHours The duration of our reference window in hours (0 for unlimited)
-     * @return true if there is overlap, false otherwise
+     * Load all necessary data and create events for the simulation
      */
-    private boolean isTimeInInterval(LocalDateTime intervalStart, LocalDateTime intervalEnd, 
-                                    LocalDateTime referenceStart, int durationHours) {
-        // If durationHours is 0, we consider all times after referenceStart
-        if (durationHours <= 0) {
-            return !intervalEnd.isBefore(referenceStart);
-        }
+    public List<Event> loadAllEvents(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Event> allEvents = new ArrayList<>();
         
-        LocalDateTime referenceEnd = referenceStart.plusHours(durationHours);
+        // Load scheduled maintenance events
+        allEvents.addAll(createMaintenanceEvents("data/mantpreventivo.txt", startDate, endDate));
         
-        // Check if there's overlap between the intervals
-        return !(intervalEnd.isBefore(referenceStart) || intervalStart.isAfter(referenceEnd));
+        // Load order events
+        allEvents.addAll(createOrderEvents("data/ventas202503.txt", startDate, endDate));
+        
+        // Load blockage events
+        allEvents.addAll(createBlockageEvents("data/202503.bloqueadas", startDate, endDate));
+        
+        // Add scheduled depot refill events
+        allEvents.addAll(createDepotRefillEvents(startDate, endDate));
+        
+        return allEvents;
     }
 }

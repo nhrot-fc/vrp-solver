@@ -3,6 +3,7 @@ package com.vroute.ui;
 import javax.swing.*;
 import java.awt.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,10 @@ import com.vroute.models.Environment;
 import com.vroute.models.Order;
 import com.vroute.models.Position;
 import com.vroute.models.Vehicle;
+import com.vroute.solution.Route;
+import com.vroute.solution.RouteStop;
+import com.vroute.solution.Solution;
+import com.vroute.orchest.Orchestrator;
 
 public class EnvironmentRenderer extends JPanel {
     private static final int DEFAULT_CELL_SIZE = 12;
@@ -29,6 +34,7 @@ public class EnvironmentRenderer extends JPanel {
     private Map<String, Color> vehicleColors;
     private boolean autoCenter = true;
     private Point viewCenter = null;
+    private Orchestrator orchestrator;
     
     public EnvironmentRenderer() {
         setBackground(Color.WHITE);
@@ -39,6 +45,17 @@ public class EnvironmentRenderer extends JPanel {
         this.environment = environment;
         resetZoom();
         repaint();
+    }
+    
+    public void setOrchestrator(Orchestrator orchestrator) {
+        this.orchestrator = orchestrator;
+    }
+    
+    public Solution getCurrentSolution() {
+        if (orchestrator != null) {
+            return orchestrator.getCurrentSolution();
+        }
+        return null;
     }
     
     public void resetZoom() {
@@ -123,21 +140,17 @@ public class EnvironmentRenderer extends JPanel {
         
         Graphics2D g2d = (Graphics2D) g;
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        
-        // Draw grid lines
         drawGrid(g2d);
-        
-        // Draw blockages
         drawBlockages(g2d);
-        
-        // Draw depots
         drawDepots(g2d);
-        
-        // Draw orders
-        drawOrders(g2d);
-        
-        // Draw vehicles
+        drawOrders(g2d);    
         drawVehicles(g2d);
+        
+        // Draw current time
+        g2d.setFont(new Font("Arial", Font.BOLD, 14));
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("Time: " + environment.getCurrentTime().format(DateTimeFormatter.ofPattern(Constants.DATE_TIME_FORMAT)),
+                10, getHeight() - 10);
     }
     
     private void drawGrid(Graphics2D g2d) {
@@ -247,6 +260,11 @@ public class EnvironmentRenderer extends JPanel {
         for (Vehicle vehicle : environment.getVehicles()) {
             Color vehicleColor = getVehicleColor(vehicle);
             drawVehicle(g2d, vehicle, vehicleColor);
+            
+            // Draw vehicle's current path if available and vehicle is active
+            if (vehicle.isActive()) {
+                drawVehiclePath(g2d, vehicle, vehicleColor);
+            }
         }
     }
     
@@ -306,6 +324,45 @@ public class EnvironmentRenderer extends JPanel {
         // Add vehicle ID as label
         g2d.setFont(new Font("Arial", Font.PLAIN, 9 * cellSize / DEFAULT_CELL_SIZE));
         g2d.drawString(vehicle.getId(), x, y - 1);
+    }
+    
+    private void drawVehiclePath(Graphics2D g2d, Vehicle vehicle, Color color) {
+        // Get the current solution from the orchestrator
+        Solution currentSolution = getCurrentSolution();
+        
+        if (currentSolution != null) {
+            for (Route route : currentSolution.getRoutes()) {
+                if (route.getVehicle().getId().equals(vehicle.getId())) {
+                    // Found the route for this vehicle
+                    List<RouteStop> stops = route.getStops();
+                    
+                    // Draw path to each stop
+                    for (RouteStop stop : stops) {
+                        List<Position> path = stop.getPath();
+                        if (path != null && !path.isEmpty()) {
+                            // Draw the path
+                            g2d.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 128)); // Semi-transparent
+                            g2d.setStroke(new BasicStroke(2.0f));
+                            
+                            Position lastPos = vehicle.getCurrentPosition();
+                            
+                            for (Position pos : path) {
+                                g2d.drawLine(
+                                    adjustX(lastPos.getX() * cellSize), 
+                                    adjustY(lastPos.getY() * cellSize),
+                                    adjustX(pos.getX() * cellSize), 
+                                    adjustY(pos.getY() * cellSize)
+                                );
+                                lastPos = pos;
+                            }
+                        }
+                    }
+                    
+                    // We only need to draw the path for this vehicle once
+                    break;
+                }
+            }
+        }
     }
     
     @Override

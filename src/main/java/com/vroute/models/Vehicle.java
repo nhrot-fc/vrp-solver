@@ -34,6 +34,7 @@ public class Vehicle {
     public int getCurrentGlpM3() { return currentGlpM3; }
     public double getCurrentFuelGal() { return currentFuelGal; }
     public VehicleStatus getStatus() { return status; }
+    public boolean isActive() { return status != VehicleStatus.UNAVAILABLE && status != VehicleStatus.MAINTENANCE; }
 
     // Setters
     public void setCurrentPosition(Position position) { this.currentPosition = position; }
@@ -42,7 +43,7 @@ public class Vehicle {
     public void setCurrentFuelGal(double fuelGal) { this.currentFuelGal = fuelGal; }
 
     // Operations
-    public void consumeFuel(double distanceKm) {
+    public void consumeFuelFromDistance(double distanceKm) {
         double combinedWeight = this.type.convertGlpM3ToTon(this.currentGlpM3) + this.type.getTareWeightTon();
         double fuelConsumedGallons = (distanceKm * combinedWeight) / Constants.CONSUMPTION_FACTOR;
         this.currentFuelGal = Math.max(0, this.currentFuelGal - fuelConsumedGallons);

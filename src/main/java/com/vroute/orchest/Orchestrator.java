@@ -1,431 +1,330 @@
 package com.vroute.orchest;
 
-import com.vroute.models.*;
-import com.vroute.solution.DepotStop;
-import com.vroute.solution.OrderStop;
-import com.vroute.solution.Route;
-import com.vroute.solution.RouteStop;
-import com.vroute.solution.Solution;
-import com.vroute.taboo.TabuSearch;
-
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.PriorityQueue;
-import java.util.ArrayList;
+import java.util.Random;
+
+import com.vroute.models.*;
+import com.vroute.solution.Route;
+import com.vroute.solution.Solution;
+import com.vroute.solution.Solver;
+import com.vroute.taboo.TabuSearch;
+import com.vroute.solution.RouteStop;
+import com.vroute.solution.OrderStop;
+import com.vroute.solution.DepotStop;
 
 /**
  * Orchestrator manages the simulation of the environment over time,
  * handling events like order arrivals, blockages, and maintenance tasks.
  */
 public class Orchestrator {
-    private Environment environment;
-    private PriorityQueue<Event> globalEventsQueue;
-    private PriorityQueue<Event> simulationEventsQueue;
-    private DataReader dataReader;
-    private TabuSearch solver;
+    private final Environment environment;
+    private final Solver solver;
+    private final PriorityQueue<Event> eventQueue;
+    private final Random random;
 
-    private LocalDateTime lastReplanningTime;
+    private boolean running;
+    private boolean replanFlag;
+    private Solution currentSolution;
 
-    // For reset
-    private Environment initialEnvironment;
-    private String ordersFilePath;
-    private String blockagesFilePath;
-    private String maintenanceFilePath;
-
-    // Constants
-    private static final int SERVICE_TIME = 15; // Default service time in minutes
-    private static final int DEPRATURE_TIME = 15; // Default departure time in minutes
-
-    // Tiempo entre replanificaciones (en minutos)
-    private static final long REPLAN_INTERVAL_MINUTES = 60;
-
-    // Factor de demanda mínimo para justificar replanificación
-    private static final int DEMAND_FACTOR_THRESHOLD = 5;
-
-    public Orchestrator(Environment initialEnvironment) {
-        this.environment = initialEnvironment;
-        // Store initial time for reset
-        this.initialEnvironment = new Environment(
-                new ArrayList<>(),
-                null,
-                new ArrayList<>(),
-                initialEnvironment.getCurrentTime());
-        this.globalEventsQueue = new PriorityQueue<>();
-        this.simulationEventsQueue = new PriorityQueue<>();
-        this.dataReader = new DataReader();
-        lastReplanningTime = environment.getCurrentTime();
+    public Orchestrator(Environment environment) {
+        this.environment = environment;
+        this.solver = new TabuSearch();
+        this.eventQueue = new PriorityQueue<>();
+        this.random = new Random();
+        this.running = false;
+        this.replanFlag = true;
+        this.currentSolution = null;
     }
 
-    /**
-     * Resets the simulation to its initial state
-     * Must be called after loadEvents to enable proper reset
-     * 
-     * @return The reset environment instance
-     */
-    public Environment resetSimulation() {
-        // Clear event queues
-        globalEventsQueue.clear();
-        simulationEventsQueue.clear();
-
-        // Reset environment to initial state by clearing all dynamic data
-        // Clear orders
-        environment.clearAllOrders();
-
-        // Reset time to original
-        environment.setCurrentTime(initialEnvironment.getCurrentTime());
-
-        // Reset vehicle status to AVAILABLE
-        for (Vehicle vehicle : environment.getVehicles()) {
-            vehicle.setStatus(VehicleStatus.AVAILABLE);
-        }
-
-        // Clear active blockages, incidents and maintenance tasks
-        environment.clearBlockages();
-        environment.clearIncidents();
-        environment.clearMaintenanceTasks();
-
-        // Reset any depot resources if needed
-        environment.resetDepots();
-
-        // If file paths are stored, reload events
-        if (ordersFilePath != null && blockagesFilePath != null && maintenanceFilePath != null) {
-            loadEvents(ordersFilePath, blockagesFilePath, maintenanceFilePath);
-        }
-
-        System.out.println("Simulation has been reset to initial state");
-        return environment;
+    public void addEvent(Event event) {
+        eventQueue.add(event);
     }
 
-    /**
-     * Init global events queue with initial state
-     */
-    public void loadEvents(String ordersFilePath, String blockagesFilePath, String maintenanceFilePath) {
-        // Store file paths for potential reset
-        this.ordersFilePath = ordersFilePath;
-        this.blockagesFilePath = blockagesFilePath;
-        this.maintenanceFilePath = maintenanceFilePath;
-
-        LocalDateTime startTime = environment.getCurrentTime();
-
-        // Load orders for next 24 hours
-        List<Order> orders = dataReader.loadOrders(ordersFilePath, startTime, 24, 0);
-        for (Order order : orders) {
-            Event event = new Event(EventType.ORDER_ARRIVAL, order.getArriveTime(), order.getId(), order);
-            globalEventsQueue.add(event);
-        }
-
-        // Load blockages for next 24 hours
-        List<Blockage> blockages = dataReader.loadBlockages(blockagesFilePath, startTime, 24, 0);
-        for (Blockage blockage : blockages) {
-            // Schedule start of blockage
-            Event startEvent = new Event(EventType.BLOCKAGE_START, blockage.getStartTime(),
-                    "blockage", blockage);
-            globalEventsQueue.add(startEvent);
-
-            // Schedule end of blockage
-            Event endEvent = new Event(EventType.BLOCKAGE_END, blockage.getEndTime(),
-                    "blockage", blockage);
-            globalEventsQueue.add(endEvent);
-        }
-
-        // Load maintenance tasks for next 30 days
-        List<Maintenance> tasks = dataReader.loadMaintenanceSchedule(maintenanceFilePath, startTime, 30, 0);
-        for (Maintenance task : tasks) {
-            // Schedule start of maintenance
-            Event startEvent = new Event(EventType.MAINTENANCE_START, task.getStartTime(),
-                    task.getVehicleId(), task);
-            globalEventsQueue.add(startEvent);
-
-            // Schedule end of maintenance
-            Event endEvent = new Event(EventType.MAINTENANCE_END, task.getEndTime(),
-                    task.getVehicleId(), task);
-            globalEventsQueue.add(endEvent);
-        }
-        environment.addBlockages(blockages);
-        environment.addMaintenanceTasks(tasks);
+    public void addEvents(List<Event> events) {
+        eventQueue.addAll(events);
     }
 
-    /**
-     * Advances the simulation by the specified number of minutes
-     */
-    public void advanceTime(int minutes) {
-        LocalDateTime targetTime = environment.getCurrentTime().plusMinutes(minutes);
+    public void start() {
+        this.running = true;
+    }
 
-        // Process all events until the target time
-        while ((!globalEventsQueue.isEmpty() && !globalEventsQueue.peek().getTime().isAfter(targetTime)) ||
-                (!simulationEventsQueue.isEmpty() && !simulationEventsQueue.peek().getTime().isAfter(targetTime))) {
-            Event event = null;
+    public void stop() {
+        this.running = false;
+    }
 
-            // Compare events from both queues and take the earliest one
-            if (!globalEventsQueue.isEmpty() && !simulationEventsQueue.isEmpty()) {
-                Event nextSimulationEvent = simulationEventsQueue.peek();
-                Event nextGlobalEvent = globalEventsQueue.peek();
-                if (nextGlobalEvent.getTime().isAfter(nextSimulationEvent.getTime())) {
-                    event = simulationEventsQueue.poll();
-                } else {
-                    event = globalEventsQueue.poll();
-                }
-            } else if (!globalEventsQueue.isEmpty()) {
-                event = globalEventsQueue.poll();
-            } else if (!simulationEventsQueue.isEmpty()) {
-                event = simulationEventsQueue.poll();
-            }
+    public Solution getCurrentSolution() {
+        return this.currentSolution;
+    }
 
-            if (event == null) {
-                break;
-            }
-            handleEvent(event);
+    public Environment getEnvironment() {
+        return this.environment;
+    }
+
+    public void advanceTime(Duration duration) {
+        if (!running)
+            return;
+        if (replanFlag) {
+            currentSolution = replan();
         }
 
-        if (needsReplanning()) {
-            Solution solution = solver.solve(environment);
-            processSolution(solution);
-            lastReplanningTime = environment.getCurrentTime();
+        // Process any events that should occur during this time period
+        LocalDateTime currentTime = environment.getCurrentTime();
+        LocalDateTime futureTime = currentTime.plus(duration);
+        
+        // Process events scheduled before or at futureTime
+        while (!eventQueue.isEmpty() && !eventQueue.peek().getTime().isAfter(futureTime)) {
+            Event event = eventQueue.poll();
+            processEvent(event);
         }
-
+        
+        // Randomly generate incidents for vehicles in transit if they're active
+        if (currentSolution != null) {
+            checkForRandomIncidents(currentTime, duration);
+        }
+        
+        // Process solution to move vehicles along routes
+        processSolution(duration);
+        
         // Update environment time
-        environment.advanceTime(minutes);
+        environment.updateTime(duration);
     }
 
-    /**
-     * Helper method for debug output
-     * 
-     * @param message The debug message to print
-     */
-    private void debug(String message) {
-        if (Constants.DEBUG) {
-            System.out.println("[DEBUG] " + message);
+    private void checkForRandomIncidents(LocalDateTime currentTime, Duration duration) {
+        // Only consider active vehicles that are currently on a route
+        for (Route route : currentSolution.getRoutes()) {
+            Vehicle vehicle = environment.getVehicleById(route.getVehicle().getId());
+            
+            if (vehicle != null && vehicle.isActive()) {
+                // Calculate incident probability based on vehicle type and route length
+                double incidentProbability = calculateIncidentProbability(vehicle, route);
+                
+                // Scale probability by the duration of this time step
+                double scaledProbability = incidentProbability * (duration.toMinutes() / 60.0);
+                
+                // Random check if an incident occurs
+                if (random.nextDouble() < scaledProbability) {
+                    // Generate a random incident
+                    IncidentType incidentType = getRandomIncidentType();
+                    Shift currentShift = determineCurrentShift(currentTime);
+                    Incident incident = new Incident(vehicle.getId(), incidentType, currentShift, currentTime);
+                    
+                    // Create and queue an immediate incident event
+                    Event incidentEvent = new Event(EventType.INCIDENT, currentTime, incident);
+                    processEvent(incidentEvent);
+                }
+            }
+        }
+    }
+    
+    private double calculateIncidentProbability(Vehicle vehicle, Route route) {
+        // Base probability from Constants
+        double baseProb = Constants.INCIDENT_ROUTE_OCCURRENCE_MIN_PERCENTAGE;
+        
+        // Adjust based on vehicle type (older types more prone to incidents)
+        switch (vehicle.getType()) {
+            case TA: baseProb *= 1.5; break;  // Oldest type
+            case TB: baseProb *= 1.2; break;
+            case TC: baseProb *= 1.0; break;
+            case TD: baseProb *= 0.8; break;  // Newest type
+        }
+        
+        // Adjust based on route length
+        int stopCount = route.getStops().size();
+        if (stopCount > 10) baseProb *= 1.5;
+        else if (stopCount > 5) baseProb *= 1.2;
+        
+        // Cap at max probability
+        return Math.min(baseProb, Constants.INCIDENT_ROUTE_OCCURRENCE_MAX_PERCENTAGE);
+    }
+    
+    private IncidentType getRandomIncidentType() {
+        // Different probability for each incident type
+        double value = random.nextDouble();
+        if (value < 0.6) {
+            return IncidentType.TI1; // 60% chance of minor incident
+        } else if (value < 0.9) {
+            return IncidentType.TI2; // 30% chance of moderate incident
+        } else {
+            return IncidentType.TI3; // 10% chance of major incident
+        }
+    }
+    
+    private Shift determineCurrentShift(LocalDateTime time) {
+        int hour = time.getHour();
+        if (hour >= 6 && hour < 14) {
+            return Shift.T1;  // Morning shift (6am-2pm)
+        } else if (hour >= 14 && hour < 22) {
+            return Shift.T2;  // Afternoon shift (2pm-10pm)
+        } else {
+            return Shift.T3;  // Night shift (10pm-6am)
         }
     }
 
-    /**
-     * Process a single event based on its type
-     */
-    private void handleEvent(Event event) {
-        debug("Handling event: " + event);
+    public Solution replan() {
+        replanFlag = false;
+        return solver.solve(environment);
+    }
 
-        switch (event.getType()) {
-            case ORDER_ARRIVAL:
-                Order order = event.getData();
-                environment.addOrder(order);
-                break;
+    public void processSolution(Duration duration) {
+        if (currentSolution == null)
+            return;
 
-            case BLOCKAGE_START:
-                Blockage blockage = event.getData();
-                environment.addBlockage(blockage);
-                break;
+        LocalDateTime currentTime = environment.getCurrentTime();
+        LocalDateTime futureTime = currentTime.plus(duration);
 
-            case BLOCKAGE_END:
-                // Nothing to do, just keeping for notification
-                break;
+        for (Route route : currentSolution.getRoutes()) {
+            Vehicle vehicle = environment.getVehicleById(route.getVehicle().getId());
+            if (vehicle == null || !vehicle.isActive())
+                continue;
 
-            case MAINTENANCE_START:
-                Maintenance task = event.getData();
-                if (!environment.getActiveMaintenance().contains(task)) {
-                    environment.addMaintenanceTask(task);
+            // Skip routes that haven't started yet
+            if (route.getStartTime().isAfter(currentTime))
+                continue;
+
+            // Process this route until we reach futureTime or complete all stops
+            LocalDateTime routeTime = route.getStartTime();
+            if (routeTime.isBefore(currentTime)) {
+                routeTime = currentTime;
+            }
+
+            Position currentPosition = vehicle.getCurrentPosition();
+            List<RouteStop> remainingStops = route.getStops();
+
+            while (!remainingStops.isEmpty() && !routeTime.isAfter(futureTime)) {
+                RouteStop currentStop = remainingStops.get(0);
+                List<Position> path = currentStop.getPath();
+
+                if (path == null || path.isEmpty()) {
+                    // We're already at the stop, process it
+                    processStop(vehicle, currentStop, routeTime);
+                    remainingStops.remove(0);
+                    continue;
                 }
-                // Find and update vehicle status
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(event.getEntityId())) {
-                        vehicle.setStatus(VehicleStatus.MAINTENANCE);
+
+                // Find our position in the path
+                int currentPosIndex = -1;
+                for (int i = 0; i < path.size(); i++) {
+                    if (path.get(i).equals(currentPosition)) {
+                        currentPosIndex = i;
                         break;
                     }
                 }
-                break;
 
-            case MAINTENANCE_END:
-                // Find and update vehicle status
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(event.getEntityId())) {
-                        vehicle.setStatus(VehicleStatus.AVAILABLE);
-                        break;
-                    }
-                }
-                break;
+                // If we can't find our position, start from the beginning
+                if (currentPosIndex == -1)
+                    currentPosIndex = 0;
 
-            case VEHICLE_BREAKDOWN:
-                Incident incident = event.getData();
-                environment.addIncident(incident);
-                // Find and update vehicle status
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(event.getEntityId())) {
+                // Process movement along the path
+                boolean reachedStop = false;
+                for (int i = currentPosIndex + 1; i < path.size(); i++) {
+                    Position nextPosition = path.get(i);
+
+                    // Calculate time and fuel to move to next position
+                    double distanceKm = currentPosition.distanceTo(nextPosition);
+                    double fuelNeeded = vehicle.calculateFuelNeeded(distanceKm);
+                    int timeMinutes = (int) Math.ceil(distanceKm * 60 / Constants.VEHICLE_AVG_SPEED);
+
+                    // Check if we have enough fuel
+                    if (vehicle.getCurrentFuelGal() < fuelNeeded) {
+                        // Not enough fuel, vehicle is stranded
                         vehicle.setStatus(VehicleStatus.UNAVAILABLE);
                         break;
                     }
-                }
-                break;
 
+                    // Check if moving to this position would exceed our time limit
+                    LocalDateTime nextTime = routeTime.plusMinutes(timeMinutes);
+                    if (nextTime.isAfter(futureTime)) {
+                        // We don't have enough time to reach the next position
+                        break;
+                    }
+
+                    // Move to next position
+                    vehicle.consumeFuelFromDistance(distanceKm);
+                    vehicle.setCurrentPosition(nextPosition);
+                    currentPosition = nextPosition;
+                    routeTime = nextTime;
+
+                    // If we've reached the stop position
+                    if (i == path.size() - 1) {
+                        processStop(vehicle, currentStop, routeTime);
+                        remainingStops.remove(0);
+                        reachedStop = true;
+                        break;
+                    }
+                }
+
+                if (!reachedStop) {
+                    // We didn't reach the stop within the time limit
+                    break;
+                }
+            }
+        }
+    }
+
+    private void processStop(Vehicle vehicle, RouteStop stop, LocalDateTime stopTime) {
+        if (stop instanceof OrderStop) {
+            OrderStop orderStop = (OrderStop) stop;
+            Order order = environment.getOrderById(orderStop.getOrder().getId());
+
+            if (order != null && !order.isDelivered()) {
+                int glpToDeliver = Math.min(orderStop.getGlpDelivery(), order.getRemainingGlpM3());
+                glpToDeliver = Math.min(glpToDeliver, vehicle.getCurrentGlpM3());
+
+                if (glpToDeliver > 0) {
+                    vehicle.serveOrder(order, glpToDeliver, stopTime);
+                }
+            }
+        } else if (stop instanceof DepotStop) {
+            DepotStop depotStop = (DepotStop) stop;
+            Depot depot = environment.getDepotById(depotStop.getDepot().getId());
+
+            if (depot != null) {
+                // Refill GLP
+                int glpToRecharge = Math.min(depotStop.getGlpRecharge(),
+                        vehicle.getGlpCapacityM3() - vehicle.getCurrentGlpM3());
+                glpToRecharge = Math.min(glpToRecharge, depot.getCurrentGlpM3());
+
+                if (glpToRecharge > 0) {
+                    depot.serveGLP(glpToRecharge);
+                    vehicle.refill(glpToRecharge);
+                }
+
+                // Refuel if possible
+                if (depot.canRefuel()) {
+                    vehicle.refuel();
+                }
+            }
+        }
+    }
+
+    public void processEvent(Event event) {
+        System.out.println(event);
+        switch (event.getType()) {
+            case INCIDENT:
+                environment.registerIncident((Incident) event.getData());
+                replanFlag = true;
+                break;
+            case MAINTENANCE:
+                environment.registerMaintenance((Maintenance) event.getData());
+                replanFlag = true;
+                break;
+            case BLOCKAGE_START:
+                break;
+            case BLOCKAGE_END:
+                break;
             case GLP_DEPOT_REFILL:
-                for (Depot depot : environment.getAuxDepots()) {
-                    if (depot.getId().equals(event.getEntityId())) {
-                        depot.refillGLP();
-                        break;
-                    }
-                }
+                environment.refillDepots();
+                replanFlag = true; 
                 break;
-
-            case SIMULATION_END:
-                // Implementation for simulation end
+            case ORDER_ARRIVAL:
+                environment.addOrder((Order) event.getData());
+                replanFlag = true;
                 break;
-
-            case ORDER_DELIVERED:
-                OrderStop orderStop = event.getData();
-                for (Order or : environment.getPendingOrders()) {
-                    if (or.getId().equals(orderStop.getOrder().getId())) {
-                        or.recordDelivery(orderStop.getGlpDelivery(), event.getEntityId(), event.getTime());
-                        environment.removeDeliveredOrders();
-                        break;
-                    }
-                }
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(event.getEntityId())) {
-                        vehicle.dispenseGlp(orderStop.getGlpDelivery());
-                        vehicle.setStatus(VehicleStatus.SERVING);
-                        break;
-                    }
-                }
-                break;
-
-            case GLP_DEPOT_UPDATED:
-                DepotStop depotStop = event.getData();
-                for (Depot depot : environment.getAuxDepots()) {
-                    if (depot.getId().equals(depotStop.getDepot().getId())) {
-                        depot.serveGLP(depotStop.getGlpRecharge());
-                        break;
-                    }
-                }
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(event.getEntityId())) {
-                        vehicle.dispenseGlp(depotStop.getGlpRecharge());
-                        break;
-                    }
-                }
-                break;
-
-            case VEHICLE_DEPARTURE:
-                String departingVehicleId = event.getEntityId();
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(departingVehicleId)) {
-                        vehicle.setStatus(VehicleStatus.DRIVING);
-                        break;
-                    }
-                }
-                break;
-
-            case VEHICLE_ARRIVES_MAIN_DEPOT:
-                String arrivingVehicleId = event.getEntityId();
-                for (Vehicle vehicle : environment.getVehicles()) {
-                    if (vehicle.getId().equals(arrivingVehicleId)) {
-                        vehicle.setStatus(VehicleStatus.IDLE);
-                        break;
-                    }
-                }
-                break;
-
             default:
-                throw new IllegalArgumentException("Unknown event type: " + event.getType());
+                break;
         }
-    }
-
-    /**
-     * Determina si es necesaria una replanificación basada en:
-     * 1. Ha transcurrido una hora desde la última replanificación
-     * 2. El factor de demanda (nuevas órdenes) supera el umbral definido
-     *
-     * @return true si se debe ejecutar una replanificación, false en caso
-     *         contrario.
-     */
-    private boolean needsReplanning() {
-        LocalDateTime currentTime = environment.getCurrentTime();
-
-        // Calculamos minutos desde la última replanificación
-        long minutesSinceLastReplan = java.time.Duration.between(lastReplanningTime, currentTime).toMinutes();
-        debug("Minutos desde última replanificación: " + minutesSinceLastReplan);
-
-        // Verificamos si ha pasado el tiempo de intervalo
-        if (minutesSinceLastReplan >= REPLAN_INTERVAL_MINUTES) {
-            // Contamos nuevas órdenes desde la última replanificación
-            List<Order> pendingOrders = environment.getPendingOrders();
-            long newOrdersCount = pendingOrders.stream()
-                    .filter(order -> order.getArriveTime().isAfter(lastReplanningTime))
-                    .count();
-
-            debug("Órdenes nuevas: " + newOrdersCount + "/" + DEMAND_FACTOR_THRESHOLD);
-
-            // Replanificamos si hay suficiente demanda
-            if (newOrdersCount >= DEMAND_FACTOR_THRESHOLD) {
-                System.out.println("Replanificando: " + newOrdersCount + " nuevas órdenes desde última planificación");
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Process a solution to generate simulation events
-     * 
-     * @param solution The solution to process
-     */
-    private void processSolution(Solution solution) {
-        // Clear existing simulation events
-        simulationEventsQueue.clear();
-        debug("Procesando solución con " + solution.getRoutes().size() + " rutas");
-
-        // Process each route in the solution
-        for (Route route : solution.getRoutes()) {
-            String vehicleId = route.getVehicle().getId();
-
-            // Skip routes for vehicles in maintenance or unavailable
-            boolean vehicleAvailable = environment.getVehicles().stream()
-                    .filter(v -> v.getId().equals(vehicleId))
-                    .anyMatch(v -> v.getStatus() != VehicleStatus.MAINTENANCE
-                            && v.getStatus() != VehicleStatus.UNAVAILABLE);
-
-            if (!vehicleAvailable) {
-                continue;
-            }
-
-            for (RouteStop stop : route.getStops()) {
-                // Process main depots stops
-                if (stop instanceof DepotStop) {
-                    DepotStop depotStop = (DepotStop) stop;
-                    if (depotStop.getDepot().getId().equals(environment.getMainDepot().getId())) {
-                        // Create arrival to main depot and departure events
-                        LocalDateTime arrivalTime = route.getStartTime();
-                        simulationEventsQueue.add(
-                                new Event(EventType.VEHICLE_ARRIVES_MAIN_DEPOT, arrivalTime, vehicleId, depotStop));
-
-                        // Schedule departure after service time
-                        LocalDateTime departureTime = arrivalTime.plusMinutes(DEPRATURE_TIME);
-                        simulationEventsQueue
-                                .add(new Event(EventType.VEHICLE_DEPARTURE, departureTime, vehicleId, vehicleId));
-                    } else {
-                        // It is a stop for an auxiliary depot
-                        // Create GLP depot update event
-                        simulationEventsQueue.add(new Event(EventType.GLP_DEPOT_UPDATED, route.getStartTime(),
-                                vehicleId, depotStop));
-                    }
-
-                } else if (stop instanceof OrderStop) {
-                    OrderStop orderStop = (OrderStop) stop;
-                    // Create order delivery event
-                    simulationEventsQueue.add(
-                            new Event(EventType.ORDER_DELIVERED, route.getStartTime(), vehicleId, orderStop));
-
-                    // Schedule vehicle departure after service time
-                    LocalDateTime departureTime = route.getStartTime().plusMinutes(SERVICE_TIME);
-                    simulationEventsQueue
-                            .add(new Event(EventType.VEHICLE_DEPARTURE, departureTime, vehicleId, vehicleId));
-                }
-            }
-        }
-    }
-
-    /**
-     * Gets the current environment
-     */
-    public Environment getEnvironment() {
-        return environment;
     }
 }

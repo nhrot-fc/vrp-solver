@@ -69,6 +69,10 @@ public class Blockage {
         return isActiveAt(momento) && blockagePoints.contains(posicion);
     }
 
+    public boolean isCompleted(LocalDateTime dateTime) {
+        return dateTime.isAfter(endTime);
+    }
+
     @Override
     public String toString() {
         return String.format("🚧 [%s - %s] %d points", 

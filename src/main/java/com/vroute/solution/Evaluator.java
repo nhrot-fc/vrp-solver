@@ -119,7 +119,7 @@ public class Evaluator {
                 // Update current status
                 currentVehicle.setCurrentPosition(stop.getPosition());
                 currentVehicle.setCurrentGlpM3(currentVehicle.getCurrentGlpM3() + glpChange);
-                currentVehicle.consumeFuel(distance);
+                currentVehicle.consumeFuelFromDistance(distance);
                 currentPosition = stop.getPosition();
                 currentTime = currentTime.plus(duration);
 

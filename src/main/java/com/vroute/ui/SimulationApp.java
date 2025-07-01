@@ -2,300 +2,71 @@ package com.vroute.ui;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 
 import com.vroute.models.Environment;
 import com.vroute.orchest.Orchestrator;
-import com.vroute.controllers.SimulationController;
 
 public class SimulationApp extends JFrame {
     private EnvironmentRenderer environmentRenderer;
     private ControlPanel controlPanel;
-    private Environment environment;
     private Orchestrator orchestrator;
-    private JScrollPane mapScrollPane;
-    private SimulationController controller;
-    
-    public SimulationApp() {
+
+    public SimulationApp(Environment initialEnvironment) {
+        this.orchestrator = new Orchestrator(initialEnvironment);
+        initializeUI();
+    }
+
+    private void initializeUI() {
+        // Set window properties
         setTitle("V-Route Simulation");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(1200, 800);
         
-        initComponents();
-        setupLayout();
-        setupListeners();
-        
-        pack();
-        setLocationRelativeTo(null); // Center on screen
-        setVisible(true);
-    }
-    
-    private void initComponents() {
+        // Create main components
         environmentRenderer = new EnvironmentRenderer();
-        controlPanel = new ControlPanel();
-        controlPanel.setRenderer(environmentRenderer);
+        environmentRenderer.setEnvironment(orchestrator.getEnvironment());
+        environmentRenderer.setOrchestrator(orchestrator);
         
-        // Create a scroll pane for the environment renderer with always visible scrollbars
-        mapScrollPane = new JScrollPane(environmentRenderer);
-        mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-        mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        mapScrollPane.getVerticalScrollBar().setUnitIncrement(16); // Faster scrolling
-        mapScrollPane.getHorizontalScrollBar().setUnitIncrement(16);
-    }
-    
-    private void setupLayout() {
-        // Set map scroll pane to a bigger size
-        mapScrollPane.setPreferredSize(new Dimension(1200, 800));
+        controlPanel = new ControlPanel(orchestrator);
         
-        // Use a BorderLayout instead of SplitPane for more control over sizing
+        // Add components to frame
         setLayout(new BorderLayout());
+        add(controlPanel, BorderLayout.NORTH);
         
-        // Add the map component to the center (will get all extra space)
-        add(mapScrollPane, BorderLayout.CENTER);
+        // Wrap environment renderer in a scroll pane
+        JScrollPane scrollPane = new JScrollPane(environmentRenderer);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         
-        // Create a wrapper panel with a border layout and padding
-        JPanel wrapperPanel = new JPanel(new BorderLayout());
-        wrapperPanel.setBorder(BorderFactory.createEmptyBorder(5, 25, 5, 25));
-        
-        // Add the control panel to fill the center of the wrapper
-        wrapperPanel.add(controlPanel, BorderLayout.CENTER);
-        
-        // Add the wrapper to the south of the main layout
-        add(wrapperPanel, BorderLayout.SOUTH);
-        
-        // Set minimum size for the window
-        setMinimumSize(new Dimension(800, 600));
-    }
-    
-    private void setupListeners() {
-        // Setup listener for the advance time button
-        controlPanel.setAdvanceTimeListener(e -> {
-            if (environment != null) {
-                if (orchestrator != null) {
-                    // Use orchestrator's advanceTime method
-                    orchestrator.advanceTime(1);
-                } else {
-                    // Fallback to direct environment advancement
-                    environment.advanceTime(1);
-                }
-                updateUI();
+        // Add wheel mouse listener for zooming
+        scrollPane.addMouseWheelListener(e -> {
+            if (e.isControlDown()) {
+                // Control + mouse wheel = zoom
+                int currentZoom = environmentRenderer.getZoom();
+                int notches = e.getWheelRotation();
+                environmentRenderer.setZoom(Math.max(0, Math.min(100, currentZoom - notches * 5)));
+                e.consume();
             }
         });
         
-        // Mouse listeners for map drag functionality
-        MouseAdapter mapDragListener = new MouseAdapter() {
-            private Point lastPoint = null;
-            
-            @Override
-            public void mousePressed(MouseEvent e) {
-                // When user clicks on the map, disable auto-centering
-                environmentRenderer.disableAutoCenter();
-                lastPoint = e.getPoint();
-                // Change cursor to indicate dragging is possible
-                environmentRenderer.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-            }
-            
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                lastPoint = null;
-                // Reset cursor
-                environmentRenderer.setCursor(Cursor.getDefaultCursor());
-            }
-            
-            @Override
-            public void mouseDragged(MouseEvent e) {
-                if (lastPoint != null) {
-                    // Calculate the drag distance
-                    int dx = lastPoint.x - e.getX();
-                    int dy = lastPoint.y - e.getY();
-                    
-                    // Get the viewport and scroll it
-                    JViewport viewport = mapScrollPane.getViewport();
-                    Point viewPos = viewport.getViewPosition();
-                    
-                    // Calculate new view position
-                    int newX = Math.max(0, Math.min(viewPos.x + dx, 
-                            environmentRenderer.getWidth() - viewport.getWidth()));
-                    int newY = Math.max(0, Math.min(viewPos.y + dy, 
-                            environmentRenderer.getHeight() - viewport.getHeight()));
-                    
-                    viewport.setViewPosition(new Point(newX, newY));
-                    
-                    // Update last point
-                    lastPoint = e.getPoint();
-                }
-            }
-        };
+        // Add to frame
+        add(scrollPane, BorderLayout.CENTER);
         
-        // Register mouse listeners on the environment renderer
-        environmentRenderer.addMouseListener(mapDragListener);
-        environmentRenderer.addMouseMotionListener(mapDragListener);
+        // Add status bar at the bottom that shows environment info
+        JPanel statusBar = new JPanel(new BorderLayout());
+        statusBar.setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
+        JLabel statusLabel = new JLabel(orchestrator.getEnvironment().toString());
         
-        // Setup window closing listener
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                // Cleanup code if needed
-                System.exit(0);
-            }
+        // Update status periodically
+        Timer statusTimer = new Timer(1000, e -> {
+            statusLabel.setText(orchestrator.getEnvironment().toString());
         });
-    }
-    
-    public void setEnvironment(Environment environment) {
-        this.environment = environment;
-        environmentRenderer.setEnvironment(environment);
-        controlPanel.setEnvironment(environment);
+        statusTimer.start();
         
-        // Center the view initially
-        SwingUtilities.invokeLater(() -> {
-            // Ensure scrollbars update and center on first load
-            environmentRenderer.resetZoom();
-        });
-    }
-    
-    /**
-     * Sets the orchestrator and configures event handling
-     * 
-     * @param orchestrator The orchestrator to use
-     */
-    public void setOrchestrator(Orchestrator orchestrator) {
-        this.orchestrator = orchestrator;
+        statusBar.add(statusLabel, BorderLayout.WEST);
+        add(statusBar, BorderLayout.SOUTH);
         
-        if (orchestrator != null) {
-            // Configure control panel actions
-            controlPanel.setStartAction(e -> startSimulation());
-            controlPanel.setPauseAction(e -> stopSimulation());
-            controlPanel.setResetAction(e -> resetSimulation());
-            
-            // Set reset listener for the control panel
-            controlPanel.setResetListener(e -> resetSimulation());
-        }
+        // Set window to be centered on screen
+        setLocationRelativeTo(null);
     }
-    
-    /**
-     * Sets the controller for this application
-     * 
-     * @param controller The simulation controller
-     */
-    public void setController(SimulationController controller) {
-        this.controller = controller;
-        
-        if (controller != null) {
-            // Get orchestrator from controller for consistency
-            this.orchestrator = controller.getOrchestrator();
-            
-            // Get environment from controller
-            this.environment = controller.getEnvironment();
-            
-            // Update renderer with latest environment reference
-            environmentRenderer.setEnvironment(this.environment);
-            
-            // Connect reset functionality to controller
-            controlPanel.setResetListener(e -> {
-                if (controller != null) {
-                    controller.resetSimulation();
-                }
-            });
-        }
-    }
-    
-    /**
-     * Starts the simulation
-     */
-    private void startSimulation() {
-        if (orchestrator == null) return;
-        
-        // Create a timer to advance the simulation
-        Timer simulationTimer = new Timer(controlPanel.getSimulationSpeed(), e -> {
-            orchestrator.advanceTime(1);
-            updateUI();
-        });
-        
-        simulationTimer.start();
-        controlPanel.setSimulationTimer(simulationTimer);
-    }
-    
-    /**
-     * Stops the simulation
-     */
-    private void stopSimulation() {
-        controlPanel.stopSimulation();
-    }
-    
-    /**
-     * Resets the simulation (placeholder - actual implementation would recreate the environment)
-     */
-    private void resetSimulation() {
-        // Stop the simulation first
-        stopSimulation();
-        
-        // Reset using the controller if available
-        if (controller != null) {
-            controller.resetSimulation();
-            // Center the map view
-            environmentRenderer.resetZoom();
-        }
-        // Fall back to orchestrator if no controller but orchestrator is available
-        else if (orchestrator != null) {
-            orchestrator.resetSimulation();
-            
-            // Update the UI after reset
-            updateUI();
-            
-            // Center the map view
-            environmentRenderer.resetZoom();
-        } else {
-            JOptionPane.showMessageDialog(
-                this,
-                "Cannot reset: Orchestrator not configured.",
-                "Reset Error",
-                JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    /**
-     * Updates all UI components with the new environment reference
-     * 
-     * @param environment The environment to update components with
-     */
-    public void updateAllComponentsWithEnvironment(Environment environment) {
-        // Update local reference
-        this.environment = environment;
-        
-        // Update renderer
-        if (environmentRenderer != null) {
-            environmentRenderer.setEnvironment(environment);
-        }
-        
-        // Update control panel
-        if (controlPanel != null) {
-            controlPanel.setEnvironment(environment);
-        }
-    }
-
-    /**
-     * Updates the UI components with the current state of the environment
-     */
-    public void updateUI() {
-        if (environment != null) {
-            environmentRenderer.repaint();
-            controlPanel.updateDisplay();
-        }
-    }
-    
-    public static void main(String[] args) {
-        // Use Swing's Event Dispatch Thread
-        SwingUtilities.invokeLater(() -> {
-            try {
-                // Set system look and feel
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            
-            new SimulationApp();
-        });
-    }
-} 
+}

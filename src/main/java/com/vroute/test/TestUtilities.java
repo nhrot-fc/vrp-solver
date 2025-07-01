@@ -42,7 +42,7 @@ public class TestUtilities {
         auxDepots.add(new Depot("NORTH", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, true, false));
         auxDepots.add(new Depot("EAST", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, true, false));
 
-        Depot mainDepot = new Depot("MAIN", Constants.CENTRAL_STORAGE_LOCATION, 160, true, true);
+        Depot mainDepot = new Depot("MAIN", Constants.CENTRAL_STORAGE_LOCATION, 100000, true, true);
 
         return new Environment(createStandardVehicles(), mainDepot, auxDepots, LocalDateTime.of(2025, 1, 1, 0, 0));
     }

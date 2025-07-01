@@ -2,6 +2,7 @@ package com.vroute.test;
 
 import com.vroute.models.*;
 import com.vroute.orchest.DataReader;
+import com.vroute.orchest.Event;
 import com.vroute.solution.Evaluator;
 import com.vroute.solution.Solution;
 import com.vroute.taboo.TabuSearch;
@@ -117,11 +118,29 @@ public class CompleteTest {
         Environment environment = new Environment(vehicles, mainDepot, auxDepots, startDateTime);
         String ordersFilePath = String.format("data/pedidos.20250419/ventas%s.txt",
                 startDateTime.format(DateTimeFormatter.ofPattern("yyyyMM")));
-        List<Order> orders = dataReader.loadOrders(ordersFilePath, startDateTime, 200, maxOrders);
+
+        List<Event> orderEvents = dataReader.createOrderEvents(ordersFilePath, startDateTime,
+                startDateTime.plusDays(20));
+        List<Order> orders = new ArrayList<>();
+        
+        int cont=0;
+        for (Event e : orderEvents) {
+            if(cont==maxOrders) break;
+            orders.add((Order) e.getData());
+            cont++;
+        }
+        
+
         environment.addOrders(orders);
         String blockagesFilePath = String.format("data/bloqueos.20250419/%s.bloqueos.txt",
                 startDateTime.format(DateTimeFormatter.ofPattern("yyyyMM")));
-        List<Blockage> blockages = dataReader.loadBlockages(blockagesFilePath, startDateTime, 200, 0);
+        List<Event> blockageEvents = dataReader.createBlockageEvents(blockagesFilePath, startDateTime,
+                startDateTime.plusDays(20));
+        List<Blockage> blockages = new ArrayList<>();
+        for (Event e : blockageEvents) {
+            blockages.add((Blockage) e.getData());
+        }
+
         environment.addBlockages(blockages);
 
         System.out.println(environment);

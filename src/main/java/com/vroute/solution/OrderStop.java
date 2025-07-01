@@ -2,17 +2,31 @@ package com.vroute.solution;
 
 import com.vroute.models.Position;
 import com.vroute.models.Order;
+
+import java.util.List;
+
 import com.vroute.models.Depot;
 
 public class OrderStop implements RouteStop {
     private final Order order;
     private final Position position;
     private final int glpDelivery;
+    private List<Position> path;
 
     public OrderStop(Order order, Position position, int glpDelivery) {
         this.order = order;
         this.position = position;
         this.glpDelivery = glpDelivery;
+    }
+
+    @Override
+    public void setPath(List<Position> path) {
+        this.path = path;
+    }
+
+    @Override
+    public List<Position> getPath() {
+        return path;
     }
 
     @Override

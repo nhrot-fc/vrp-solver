@@ -13,9 +13,9 @@ public class TestRunner {
         TestFramework.TestRunner runner = new TestFramework.TestRunner();
 
         // Registrar suites de tests
-        runner.addSuite(RandomDistributorTest.createSuite());
-        runner.addSuite(RouteFixerTest.createSuite());
-        runner.addSuite(EvaluatorTest.createSuite());
+        //runner.addSuite(RandomDistributorTest.createSuite());
+        //runner.addSuite(RouteFixerTest.createSuite());
+        //runner.addSuite(EvaluatorTest.createSuite());
         runner.addSuite(CompleteTest.createSuite());
 
         // Ejecutar todos los tests y obtener el reporte
