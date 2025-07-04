@@ -14,11 +14,11 @@ public class Constants {
     public static final int MIN_PACKAGE_DELIVERY_TIME_HOURS = 4; // Initial suggested value
 
     // Tiempos en minutos
-    public static final int GLP_SERVE_DURATION_MINUTES = 15;
+    public static final int GLP_SERVE_DURATION_MINUTES = 5;
+    public static final int VEHICLE_GLP_TRANSFER_DURATION_MINUTES = 5;
     public static final int REFUEL_DURATION_MINUTES = 1;
-    public static final int VEHICLE_GLP_TRANSFER_DURATION_MINUTES = 15;
     public static final int DEPOT_GLP_TRANSFER_TIME_MINUTES = 1;
-    public static final int ROUTINE_MAINTENANCE_MINUTES = 5;
+    public static final int ROUTINE_MAINTENANCE_MINUTES = 1;
 
     /*
      * =============================================
@@ -42,7 +42,7 @@ public class Constants {
      */
     // Vehículos - General
     public static final double VEHICLE_FUEL_CAPACITY_GAL = 25.0; // Gallons
-    public static final double VEHICLE_AVG_SPEED = 80.0; // Km/h
+    public static final double VEHICLE_AVG_SPEED = 120.0; // Km/h
     public static final String VEHICLE_CODE_FORMAT = "TTNN";
     public static final double CONSUMPTION_FACTOR = 360.0;
 

@@ -61,7 +61,7 @@ public class ApiServiceLauncher {
         dataReader = new DataReader();
         
         // Create environment with start date
-        LocalDateTime simulationStartTime = LocalDateTime.of(2025, 1, 1, 0, 0, 0);
+        LocalDateTime simulationStartTime = LocalDateTime.of(2025, 11, 1, 0, 0, 0);
         createEnvironment(simulationStartTime);
         
         // Load data from files

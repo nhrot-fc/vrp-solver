@@ -41,7 +41,7 @@ public class Orchestrator {
         this.stats = new SimulationStats();
         this.needsReplanning = false;
         this.tickCounter = 0;
-        this.ticksPerReplan = 90;
+        this.ticksPerReplan = 60;
     }
 
     public void addEvents(List<Event> events) {
