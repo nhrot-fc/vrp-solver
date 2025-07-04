@@ -61,7 +61,7 @@ public class ApiServiceLauncher {
         dataReader = new DataReader();
         
         // Create environment with start date
-        LocalDateTime simulationStartTime = LocalDateTime.of(2025, 1, 1, 8, 0, 0);
+        LocalDateTime simulationStartTime = LocalDateTime.of(2025, 1, 1, 0, 0, 0);
         createEnvironment(simulationStartTime);
         
         // Load data from files
@@ -92,12 +92,12 @@ public class ApiServiceLauncher {
         List<Depot> depots = new ArrayList<>();
         
         // North intermediate storage
-        Depot northDepot = new Depot("NORTH_DEPOT", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 500, true);
+        Depot northDepot = new Depot("NORTH_DEPOT", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 160, true);
         northDepot.refillGLP();
         depots.add(northDepot);
         
         // East intermediate storage
-        Depot eastDepot = new Depot("EAST_DEPOT", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 500, true);
+        Depot eastDepot = new Depot("EAST_DEPOT", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 160, true);
         eastDepot.refillGLP();
         depots.add(eastDepot);
         

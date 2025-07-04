@@ -42,16 +42,15 @@ public class Constants {
      */
     // Vehículos - General
     public static final double VEHICLE_FUEL_CAPACITY_GAL = 25.0; // Gallons
-    public static final double VEHICLE_AVG_SPEED = 120.0; // Km/h
+    public static final double VEHICLE_AVG_SPEED = 80.0; // Km/h
     public static final String VEHICLE_CODE_FORMAT = "TTNN";
-    public static final double CONSUMPTION_FACTOR = 200.0;
+    public static final double CONSUMPTION_FACTOR = 360.0;
 
     // Capacidades GLP
     public static final int TA_GLP_CAPACITY_M3 = 25; // m³
     public static final int TB_GLP_CAPACITY_M3 = 15; // m³
     public static final int TC_GLP_CAPACITY_M3 = 10; // m³
     public static final int TD_GLP_CAPACITY_M3 = 5; // m³
-    public static final int TOTAL_FLEET_GLP_CAPACITY_M3 = 200; // m³
 
     // Cantidades de vehículos
     public static final int TA_UNITS = 2;

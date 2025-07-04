@@ -9,6 +9,8 @@ import com.sun.net.httpserver.HttpHandler;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -110,6 +112,24 @@ public class StatusController implements HttpHandler {
                     if ("POST".equals(method)) {
                         serviceLauncher.pauseSimulation();
                         String response = "{\"status\":\"success\",\"message\":\"Simulation paused\"}";
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
+                    break;
+
+                case "/vehicle/breakdown":
+                    if ("POST".equals(method)) {
+                        String response = handleVehicleBreakdown(exchange);
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
+                    break;
+
+                case "/vehicle/repair":
+                    if ("POST".equals(method)) {
+                        String response = handleVehicleRepair(exchange);
                         sendResponse(exchange, 200, response);
                     } else {
                         sendErrorResponse(exchange, 405, "Method not allowed");
@@ -544,5 +564,183 @@ public class StatusController implements HttpHandler {
                 totalGlpCapacity,
                 currentGlpLoad,
                 totalGlpCapacity > 0 ? (currentGlpLoad * 100.0 / totalGlpCapacity) : 0.0);
+    }
+    
+    /**
+     * Handles vehicle breakdown requests
+     * Expected JSON: {"vehicleId": "TA01", "reason": "Engine failure", "estimatedRepairHours": 4}
+     */
+    private String handleVehicleBreakdown(HttpExchange exchange) throws IOException {
+        try {
+            // Read request body
+            BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
+            StringBuilder requestBody = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                requestBody.append(line);
+            }
+            reader.close();
+            
+            // Parse JSON manually (simple parsing)
+            String json = requestBody.toString();
+            String vehicleId = extractJsonValue(json, "vehicleId");
+            String reason = extractJsonValue(json, "reason");
+            String estimatedHoursStr = extractJsonValue(json, "estimatedRepairHours");
+            
+            if (vehicleId == null || vehicleId.trim().isEmpty()) {
+                return "{\"status\":\"error\",\"message\":\"Vehicle ID is required\"}";
+            }
+            
+            // Find vehicle
+            Vehicle vehicle = environment.findVehicleById(vehicleId);
+            if (vehicle == null) {
+                return String.format("{\"status\":\"error\",\"message\":\"Vehicle %s not found\"}", vehicleId);
+            }
+            
+            // Check if vehicle is already unavailable
+            if (vehicle.getStatus() == VehicleStatus.UNAVAILABLE) {
+                return String.format("{\"status\":\"error\",\"message\":\"Vehicle %s is already unavailable\"}", vehicleId);
+            }
+            
+            // Parse estimated repair hours
+            int estimatedHours = 2; // Default
+            if (estimatedHoursStr != null && !estimatedHoursStr.trim().isEmpty()) {
+                try {
+                    estimatedHours = Integer.parseInt(estimatedHoursStr);
+                } catch (NumberFormatException e) {
+                    estimatedHours = 2; // Use default if parsing fails
+                }
+            }
+            
+            // Create incident
+            LocalDateTime currentTime = environment.getCurrentTime();
+            Shift currentShift = Shift.getShiftForTime(currentTime.toLocalTime());
+            
+            // Use TI2 as default (requires repair, 2 hours immobilization + 1 shift repair)
+            IncidentType incidentType = estimatedHours <= 2 ? IncidentType.TI1 : 
+                                       estimatedHours <= 24 ? IncidentType.TI2 : IncidentType.TI3;
+            
+            String incidentReason = reason != null && !reason.trim().isEmpty() ? reason : "Mechanical failure";
+            Incident incident = new Incident(vehicleId, incidentType, currentShift);
+            incident.setOccurrenceTime(currentTime);
+            incident.setLocation(vehicle.getCurrentPosition());
+            
+            // Add incident to environment
+            environment.addIncident(incident);
+            
+            // Set vehicle status to unavailable
+            vehicle.setStatus(VehicleStatus.UNAVAILABLE);
+            
+            LocalDateTime repairTime = incident.calculateAvailabilityTime();
+            
+            return String.format("""
+                {
+                    "status": "success",
+                    "message": "Vehicle %s has been marked as broken down",
+                    "vehicleId": "%s",
+                    "reason": "%s",
+                    "incidentType": "%s",
+                    "breakdownTime": "%s",
+                    "estimatedRepairTime": "%s",
+                    "vehicleStatus": "%s"
+                }
+                """, vehicleId, vehicleId, incidentReason, incidentType.name(),
+                currentTime.format(formatter), 
+                repairTime != null ? repairTime.format(formatter) : "Unknown",
+                vehicle.getStatus().name());
+                
+        } catch (Exception e) {
+            return String.format("{\"status\":\"error\",\"message\":\"Error processing breakdown: %s\"}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Handles vehicle repair requests
+     * Expected JSON: {"vehicleId": "TA01"}
+     */
+    private String handleVehicleRepair(HttpExchange exchange) throws IOException {
+        try {
+            // Read request body
+            BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
+            StringBuilder requestBody = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                requestBody.append(line);
+            }
+            reader.close();
+            
+            // Parse JSON manually (simple parsing)
+            String json = requestBody.toString();
+            String vehicleId = extractJsonValue(json, "vehicleId");
+            
+            if (vehicleId == null || vehicleId.trim().isEmpty()) {
+                return "{\"status\":\"error\",\"message\":\"Vehicle ID is required\"}";
+            }
+            
+            // Find vehicle
+            Vehicle vehicle = environment.findVehicleById(vehicleId);
+            if (vehicle == null) {
+                return String.format("{\"status\":\"error\",\"message\":\"Vehicle %s not found\"}", vehicleId);
+            }
+            
+            // Check if vehicle is actually broken down
+            if (vehicle.getStatus() != VehicleStatus.UNAVAILABLE) {
+                return String.format("{\"status\":\"error\",\"message\":\"Vehicle %s is not broken down (status: %s)\"}", 
+                    vehicleId, vehicle.getStatus().name());
+            }
+            
+            // Find and resolve active incidents for this vehicle
+            List<Incident> activeIncidents = environment.getActiveIncidentsForVehicle(vehicleId);
+            int resolvedIncidents = 0;
+            
+            for (Incident incident : activeIncidents) {
+                if (!incident.isResolved()) {
+                    incident.setResolved();
+                    resolvedIncidents++;
+                }
+            }
+            
+            // Set vehicle status back to available
+            vehicle.setStatus(VehicleStatus.AVAILABLE);
+            
+            return String.format("""
+                {
+                    "status": "success",
+                    "message": "Vehicle %s has been repaired and is now available",
+                    "vehicleId": "%s",
+                    "repairTime": "%s",
+                    "resolvedIncidents": %d,
+                    "vehicleStatus": "%s"
+                }
+                """, vehicleId, vehicleId, 
+                environment.getCurrentTime().format(formatter),
+                resolvedIncidents,
+                vehicle.getStatus().name());
+                
+        } catch (Exception e) {
+            return String.format("{\"status\":\"error\",\"message\":\"Error processing repair: %s\"}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Simple JSON value extraction utility
+     */
+    private String extractJsonValue(String json, String key) {
+        String pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]+)\"";
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+        java.util.regex.Matcher m = p.matcher(json);
+        if (m.find()) {
+            return m.group(1);
+        }
+        
+        // Try without quotes for numeric values
+        pattern = "\"" + key + "\"\\s*:\\s*([^,}]+)";
+        p = java.util.regex.Pattern.compile(pattern);
+        m = p.matcher(json);
+        if (m.find()) {
+            return m.group(1).trim();
+        }
+        
+        return null;
     }
 }

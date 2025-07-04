@@ -195,9 +195,7 @@ public class Environment {
 
     public List<Vehicle> getAvailableVehicles() {
         return vehicles.stream()
-                .filter(vehicle -> vehicle.getStatus() == VehicleStatus.AVAILABLE ||
-                        vehicle.getStatus() == VehicleStatus.IDLE ||
-                        vehicle.getStatus() == VehicleStatus.DRIVING)
+                .filter(vehicle -> vehicle.getStatus() != VehicleStatus.UNAVAILABLE)
                 .collect(Collectors.toList());
     }
 
