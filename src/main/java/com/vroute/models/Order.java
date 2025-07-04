@@ -60,7 +60,8 @@ public class Order implements Stop {
     // Operations
     public void recordDelivery(int deliveredVolumeM3, String vehicleId, LocalDateTime serveDate) {
         remainingGlpM3 -= Math.abs(deliveredVolumeM3);
-        records.add(new ServeRecord(vehicleId, id, deliveredVolumeM3, serveDate));
+        remainingGlpM3 = Math.max(0, remainingGlpM3); // Ensure it doesn't go negative
+        records.add(new ServeRecord(vehicleId, id, Math.abs(deliveredVolumeM3), serveDate));
     }
 
     public boolean isDelivered() {

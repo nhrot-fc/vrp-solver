@@ -29,7 +29,8 @@ public class Depot implements Stop {
     }
 
     public void serveGLP(int amountM3) {
-        this.currentGlpM3 -= amountM3;
+        this.currentGlpM3 -= Math.abs(amountM3);
+        this.currentGlpM3 = Math.max(0, this.currentGlpM3); // Ensure it doesn't go negative
     }
 
     @Override

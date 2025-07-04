@@ -118,11 +118,11 @@ public class Action {
 
             case RELOAD:
                 vehicle.setStatus(VehicleStatus.RELOADING);
-                vehicle.refill(glpChangeM3);
+                vehicle.refill(Math.abs(glpChangeM3));
                 // Update depot inventory - find depot by position
                 Depot depot = findDepotByPosition(environment, destination);
                 if (depot != null) {
-                    depot.serveGLP(glpChangeM3);
+                    depot.serveGLP(Math.abs(glpChangeM3));
                 }
                 break;
 
@@ -132,14 +132,14 @@ public class Action {
                 if (orderId != null) {
                     Order environmentOrder = environment.findOrderById(orderId);
                     if (environmentOrder != null) {
-                        vehicle.serveOrder(environmentOrder, glpChangeM3, currentTime);
+                        vehicle.serveOrder(environmentOrder, Math.abs(glpChangeM3), currentTime);
                     } else {
                         // Fallback to the original order if not found in environment
-                        vehicle.serveOrder(order, glpChangeM3, currentTime);
+                        vehicle.serveOrder(order, Math.abs(glpChangeM3), currentTime);
                     }
                 } else {
                     // Fallback to the original order if no ID available
-                    vehicle.serveOrder(order, glpChangeM3, currentTime);
+                    vehicle.serveOrder(order, Math.abs(glpChangeM3), currentTime);
                 }
                 break;
 
@@ -256,7 +256,7 @@ public class Action {
 
             case RELOAD:
                 sb.append(String.format("🛢️  REFILLING   | Location: %-10s | Time: %3d min | GLP: +%d m³",
-                        destination, getDuration().toMinutes(), glpChangeM3));
+                        destination, getDuration().toMinutes(), Math.abs(glpChangeM3)));
                 break;
 
             case SERVE:
@@ -268,8 +268,13 @@ public class Action {
                                     .format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm")));
                 }
 
-                sb.append(String.format("🛒  SERVING     | Location: %-10s | Time: %3d min | GLP: -%d m³ %s",
-                        destination, getDuration().toMinutes(), Math.abs(glpChangeM3), orderDetails));
+                // Format GLP change: negative values show as "-x"
+                String glpChangeDisplay = glpChangeM3 < 0 ? 
+                    String.format("-%d", Math.abs(glpChangeM3)) : 
+                    String.format("%d", glpChangeM3);
+                
+                sb.append(String.format("🛒  SERVING     | Location: %-10s | Time: %3d min | GLP: %s m³ %s",
+                        destination, getDuration().toMinutes(), glpChangeDisplay, orderDetails));
                 break;
 
             case MAINTENANCE:

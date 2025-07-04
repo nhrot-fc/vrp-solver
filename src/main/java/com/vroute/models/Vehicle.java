@@ -71,14 +71,14 @@ public class Vehicle {
     // Operations
     public void consumeFuel(double distanceKm) {
         double combinedWeight = this.type.convertGlpM3ToTon(this.currentGlpM3) + this.type.getTareWeightTon();
-        double fuelConsumedGallons = (distanceKm * combinedWeight) / Constants.CONSUMPTION_FACTOR;
+        double fuelConsumedGallons = Math.abs((distanceKm * combinedWeight) / Constants.CONSUMPTION_FACTOR);
         this.currentFuelGal = Math.max(0, this.currentFuelGal - fuelConsumedGallons);
     }
 
     public double calculateFuelNeeded(double distanceKm) {
         double combinedWeight = this.type.convertGlpM3ToTon(this.currentGlpM3)
                 + this.type.getTareWeightTon();
-        return (distanceKm * combinedWeight) / Constants.CONSUMPTION_FACTOR;
+        return Math.abs((distanceKm * combinedWeight) / Constants.CONSUMPTION_FACTOR);
     }
 
     public void refuel() {
@@ -86,20 +86,21 @@ public class Vehicle {
     }
 
     public void dispenseGlp(int glpVolumeM3) {
-        this.currentGlpM3 = Math.max(0, this.currentGlpM3 - glpVolumeM3);
+        this.currentGlpM3 = Math.max(0, this.currentGlpM3 - Math.abs(glpVolumeM3));
     }
 
     public boolean canDispenseGLP(int glpVolumeM3) {
-        return this.currentGlpM3 >= glpVolumeM3;
+        return this.currentGlpM3 >= Math.abs(glpVolumeM3);
     }
 
     public void refill(int glpVolumeM3) {
-        this.currentGlpM3 = Math.min(this.glpCapacityM3, this.currentGlpM3 + glpVolumeM3);
+        this.currentGlpM3 = Math.min(this.glpCapacityM3, this.currentGlpM3 + Math.abs(glpVolumeM3));
     }
 
     public void serveOrder(Order order, int glpVolumeM3, LocalDateTime serveDate) {
-        this.dispenseGlp(Math.abs(glpVolumeM3));
-        order.recordDelivery(Math.abs(glpVolumeM3), this.id, serveDate);
+        int absoluteVolume = Math.abs(glpVolumeM3);
+        this.dispenseGlp(absoluteVolume);
+        order.recordDelivery(absoluteVolume, this.id, serveDate);
     }
 
     // Clone
