@@ -305,12 +305,13 @@ public class StatusController implements HttpHandler {
 
     /**
      * Returns a complete snapshot of the environment state in JSON format
+     * Only includes current state and active paths, not full plans
      */
     private String getEnvironmentSnapshot() {
         LocalDateTime currentTime = environment.getCurrentTime();
         List<Vehicle> vehicles = environment.getVehicles();
         List<Order> orders = environment.getOrderQueue();
-        List<Blockage> blockages = environment.getActiveBlockages();
+        List<Blockage> activeBlockages = environment.getActiveBlockagesAt(currentTime);
         Depot mainDepot = environment.getMainDepot();
         List<Depot> auxDepots = environment.getAuxDepots();
         Map<Vehicle, VehiclePlan> vehiclePlans = orchestrator.getVehiclePlans();
@@ -321,96 +322,125 @@ public class StatusController implements HttpHandler {
         json.append("  \"simulationTime\": \"").append(currentTime.format(formatter)).append("\",\n");
         json.append("  \"simulationRunning\": ").append(serviceLauncher.isSimulationRunning()).append(",\n");
 
-        // Add vehicles with positions and routes
+        // Add vehicles with current positions and only current active paths
         json.append("  \"vehicles\": [\n");
         for (int i = 0; i < vehicles.size(); i++) {
             Vehicle vehicle = vehicles.get(i);
             VehiclePlan plan = vehiclePlans.get(vehicle);
-
+            
             json.append("    {\n");
             json.append("      \"id\": \"").append(vehicle.getId()).append("\",\n");
             json.append("      \"type\": \"").append(vehicle.getType().name()).append("\",\n");
             json.append("      \"status\": \"").append(vehicle.getStatus().name()).append("\",\n");
-            json.append("      \"position\": {\"x\": ").append(vehicle.getCurrentPosition().getX())
-                    .append(", \"y\": ").append(vehicle.getCurrentPosition().getY()).append("},\n");
-            json.append("      \"fuel\": ").append(String.format("%.2f", vehicle.getCurrentFuelGal())).append(",\n");
-            json.append("      \"glp\": ").append(vehicle.getCurrentGlpM3());
-
-            // Add path information if available
+            json.append("      \"position\": {\n");
+            json.append("        \"x\": ").append(vehicle.getCurrentPosition().getX()).append(",\n");
+            json.append("        \"y\": ").append(vehicle.getCurrentPosition().getY()).append("\n");
+            json.append("      },\n");
+            json.append("      \"fuel\": {\n");
+            json.append("        \"current\": ").append(String.format("%.2f", vehicle.getCurrentFuelGal())).append(",\n");
+            json.append("        \"capacity\": ").append(String.format("%.2f", vehicle.getFuelCapacityGal())).append(",\n");
+            json.append("        \"percentage\": ").append(String.format("%.1f", (vehicle.getCurrentFuelGal() / vehicle.getFuelCapacityGal()) * 100)).append("\n");
+            json.append("      },\n");
+            json.append("      \"glp\": {\n");
+            json.append("        \"current\": ").append(vehicle.getCurrentGlpM3()).append(",\n");
+            json.append("        \"capacity\": ").append(vehicle.getGlpCapacityM3()).append(",\n");
+            json.append("        \"percentage\": ").append(String.format("%.1f", (vehicle.getCurrentGlpM3() / (double) vehicle.getGlpCapacityM3()) * 100)).append("\n");
+            json.append("      }");
+            
+            // Only include current active path, not full plan
             if (plan != null) {
-                json.append(",\n      \"path\": [");
-                List<Position> path = plan.getPathPoints();
-                for (int j = 0; j < path.size(); j++) {
-                    Position pos = path.get(j);
-                    json.append("{\"x\":").append(pos.getX()).append(",\"y\":").append(pos.getY()).append("}");
-                    if (j < path.size() - 1) {
-                        json.append(",");
+                var currentAction = plan.getActionAt(currentTime);
+                if (currentAction != null && currentAction.getType() == com.vroute.operation.ActionType.DRIVE) {
+                    json.append(",\n      \"currentPath\": {\n");
+                    json.append("        \"actionType\": \"").append(currentAction.getType().name()).append("\",\n");
+                    json.append("        \"startTime\": \"").append(currentAction.getExpectedStartTime().format(formatter)).append("\",\n");
+                    json.append("        \"endTime\": \"").append(currentAction.getExpectedEndTime().format(formatter)).append("\",\n");
+                    json.append("        \"path\": [");
+                    
+                    var path = currentAction.getPath();
+                    if (path != null && !path.isEmpty()) {
+                        for (int j = 0; j < path.size(); j++) {
+                            var pos = path.get(j);
+                            json.append("{\"x\": ").append(pos.getX()).append(", \"y\": ").append(pos.getY()).append("}");
+                            if (j < path.size() - 1) json.append(", ");
+                        }
                     }
+                    json.append("]\n");
+                    json.append("      }");
                 }
-                json.append("]");
             }
-
+            
             json.append("\n    }");
-            if (i < vehicles.size() - 1) {
-                json.append(",");
-            }
+            if (i < vehicles.size() - 1) json.append(",");
             json.append("\n");
         }
         json.append("  ],\n");
 
-        // Add orders
+        // Add only non-delivered orders
         json.append("  \"orders\": [\n");
-        for (int i = 0; i < orders.size(); i++) {
-            Order order = orders.get(i);
+        List<Order> activeOrders = orders.stream()
+                .filter(order -> !order.isDelivered())
+                .collect(java.util.stream.Collectors.toList());
+        
+        for (int i = 0; i < activeOrders.size(); i++) {
+            Order order = activeOrders.get(i);
+            
             json.append("    {\n");
             json.append("      \"id\": \"").append(order.getId()).append("\",\n");
-            json.append("      \"position\": {\"x\": ").append(order.getPosition().getX())
-                    .append(", \"y\": ").append(order.getPosition().getY()).append("},\n");
-            json.append("      \"glpRequest\": ").append(order.getGlpRequestM3()).append(",\n");
-            json.append("      \"delivered\": ").append(order.isDelivered()).append(",\n");
-            json.append("      \"overdue\": ").append(order.isOverdue(currentTime));
-            json.append("\n    }");
-            if (i < orders.size() - 1) {
-                json.append(",");
-            }
+            json.append("      \"position\": {\n");
+            json.append("        \"x\": ").append(order.getPosition().getX()).append(",\n");
+            json.append("        \"y\": ").append(order.getPosition().getY()).append("\n");
+            json.append("      },\n");
+            json.append("      \"arriveTime\": \"").append(order.getArriveTime().format(formatter)).append("\",\n");
+            json.append("      \"dueTime\": \"").append(order.getDueTime().format(formatter)).append("\",\n");
+            json.append("      \"isOverdue\": ").append(order.isOverdue(currentTime)).append(",\n");
+            json.append("      \"glp\": {\n");
+            json.append("        \"requested\": ").append(order.getGlpRequestM3()).append(",\n");
+            json.append("        \"remaining\": ").append(order.getRemainingGlpM3()).append("\n");
+            json.append("      }\n");
+            json.append("    }");
+            if (i < activeOrders.size() - 1) json.append(",");
             json.append("\n");
         }
         json.append("  ],\n");
 
-        // Add blockages
+        // Add only currently active blockages
         json.append("  \"blockages\": [\n");
-        for (int i = 0; i < blockages.size(); i++) {
-            Blockage blockage = blockages.get(i);
+        for (int i = 0; i < activeBlockages.size(); i++) {
+            Blockage blockage = activeBlockages.get(i);
+            
             json.append("    {\n");
-            json.append("      \"active\": ").append(blockage.isActiveAt(currentTime)).append(",\n");
-            json.append("      \"points\": [");
-
-            List<Position> points = blockage.getLines();
-            for (int j = 0; j < points.size(); j++) {
-                Position point = points.get(j);
-                json.append("{\"x\":").append(point.getX()).append(",\"y\":").append(point.getY()).append("}");
-                if (j < points.size() - 1) {
-                    json.append(",");
-                }
+            json.append("      \"id\": \"BLOCKAGE_").append(blockage.getStartTime().format(java.time.format.DateTimeFormatter.ofPattern("MMddHHmm"))).append("\",\n");
+            json.append("      \"startTime\": \"").append(blockage.getStartTime().format(formatter)).append("\",\n");
+            json.append("      \"endTime\": \"").append(blockage.getEndTime().format(formatter)).append("\",\n");
+            json.append("      \"positions\": [");
+            
+            var positions = blockage.getLines();
+            for (int j = 0; j < positions.size(); j++) {
+                var pos = positions.get(j);
+                json.append("{\"x\": ").append(pos.getX()).append(", \"y\": ").append(pos.getY()).append("}");
+                if (j < positions.size() - 1) json.append(", ");
             }
-
             json.append("]\n");
             json.append("    }");
-            if (i < blockages.size() - 1) {
-                json.append(",");
-            }
+            if (i < activeBlockages.size() - 1) json.append(",");
             json.append("\n");
         }
         json.append("  ],\n");
 
-        // Add depots
+        // Add depots with current state
         json.append("  \"depots\": [\n");
         // Main depot
         json.append("    {\n");
         json.append("      \"id\": \"").append(mainDepot.getId()).append("\",\n");
         json.append("      \"position\": {\"x\": ").append(mainDepot.getPosition().getX())
                 .append(", \"y\": ").append(mainDepot.getPosition().getY()).append("},\n");
-        json.append("      \"isMain\": true\n");
+        json.append("      \"isMain\": true,\n");
+        json.append("      \"canRefuel\": ").append(mainDepot.canRefuel()).append(",\n");
+        json.append("      \"glp\": {\n");
+        json.append("        \"current\": ").append(mainDepot.getCurrentGlpM3()).append(",\n");
+        json.append("        \"capacity\": ").append(mainDepot.getGlpCapacityM3()).append("\n");
+        json.append("      }\n");
         json.append("    }");
 
         // Auxiliary depots
@@ -419,7 +449,12 @@ public class StatusController implements HttpHandler {
             json.append("      \"id\": \"").append(depot.getId()).append("\",\n");
             json.append("      \"position\": {\"x\": ").append(depot.getPosition().getX())
                     .append(", \"y\": ").append(depot.getPosition().getY()).append("},\n");
-            json.append("      \"isMain\": false\n");
+            json.append("      \"isMain\": false,\n");
+            json.append("      \"canRefuel\": ").append(depot.canRefuel()).append(",\n");
+            json.append("      \"glp\": {\n");
+            json.append("        \"current\": ").append(depot.getCurrentGlpM3()).append(",\n");
+            json.append("        \"capacity\": ").append(depot.getGlpCapacityM3()).append("\n");
+            json.append("      }\n");
             json.append("    }");
         }
         json.append("\n  ]\n");
