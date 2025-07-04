@@ -1,13 +1,14 @@
 package com.vroute.models;
 
 import java.time.LocalDateTime;
+
 public class Vehicle {
     // unmutable attributes
     private final String id;
     private final VehicleType type;
     private final int glpCapacityM3;
     private final double fuelCapacityGal;
-    
+
     // mutable attributes
     private Position currentPosition;
     private int currentGlpM3;
@@ -26,18 +27,46 @@ public class Vehicle {
     }
 
     // Getters
-    public String getId() { return id; }
-    public VehicleType getType() { return type; }
-    public int getGlpCapacityM3() { return glpCapacityM3; }
-    public double getFuelCapacityGal() { return fuelCapacityGal; }
-    public Position getCurrentPosition() { return currentPosition; }
-    public int getCurrentGlpM3() { return currentGlpM3; }
-    public double getCurrentFuelGal() { return currentFuelGal; }
-    public VehicleStatus getStatus() { return status; }
+    public String getId() {
+        return id;
+    }
+
+    public VehicleType getType() {
+        return type;
+    }
+
+    public int getGlpCapacityM3() {
+        return glpCapacityM3;
+    }
+
+    public double getFuelCapacityGal() {
+        return fuelCapacityGal;
+    }
+
+    public Position getCurrentPosition() {
+        return currentPosition;
+    }
+
+    public int getCurrentGlpM3() {
+        return currentGlpM3;
+    }
+
+    public double getCurrentFuelGal() {
+        return currentFuelGal;
+    }
+
+    public VehicleStatus getStatus() {
+        return status;
+    }
 
     // Setters
-    public void setCurrentPosition(Position position) { this.currentPosition = position; }
-    public void setStatus(VehicleStatus status) { this.status = status; }
+    public void setCurrentPosition(Position position) {
+        this.currentPosition = position;
+    }
+
+    public void setStatus(VehicleStatus status) {
+        this.status = status;
+    }
 
     // Operations
     public void consumeFuel(double distanceKm) {
@@ -47,8 +76,8 @@ public class Vehicle {
     }
 
     public double calculateFuelNeeded(double distanceKm) {
-        double combinedWeight = this.type.convertGlpM3ToTon(this.currentGlpM3) 
-                              + this.type.getTareWeightTon();
+        double combinedWeight = this.type.convertGlpM3ToTon(this.currentGlpM3)
+                + this.type.getTareWeightTon();
         return (distanceKm * combinedWeight) / Constants.CONSUMPTION_FACTOR;
     }
 
@@ -65,15 +94,12 @@ public class Vehicle {
     }
 
     public void refill(int glpVolumeM3) {
-        // Ensure we don't exceed the vehicle's capacity
-        int availableSpace = this.glpCapacityM3 - this.currentGlpM3;
-        int actualRefillAmount = Math.min(glpVolumeM3, availableSpace);
-        this.currentGlpM3 = Math.min(this.glpCapacityM3, this.currentGlpM3 + actualRefillAmount);
+        this.currentGlpM3 = Math.min(this.glpCapacityM3, this.currentGlpM3 + glpVolumeM3);
     }
 
     public void serveOrder(Order order, int glpVolumeM3, LocalDateTime serveDate) {
-        this.dispenseGlp(glpVolumeM3);
-        order.recordDelivery(glpVolumeM3, this.id, serveDate);
+        this.dispenseGlp(Math.abs(glpVolumeM3));
+        order.recordDelivery(Math.abs(glpVolumeM3), this.id, serveDate);
     }
 
     // Clone
@@ -91,9 +117,9 @@ public class Vehicle {
                 type.name(),
                 id,
                 status.getIcon(),
-                currentGlpM3, 
+                currentGlpM3,
                 glpCapacityM3,
-                currentFuelGal, 
+                currentFuelGal,
                 fuelCapacityGal,
                 currentPosition.toString());
     }
