@@ -141,7 +141,7 @@ public class ApiServiceLauncher {
     private void loadDataFromFiles(LocalDateTime startTime) {
         try {
             // Base path for data files
-            Path dataPath = Paths.get("/home/nhrot/Programming/DP1/V-Route/data");
+            Path dataPath = Paths.get("data");
 
             // Load orders from current month file
             String ordersFileName = String.format("ventas%d%02d.txt", startTime.getYear(), startTime.getMonthValue());
