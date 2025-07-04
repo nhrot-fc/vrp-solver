@@ -136,6 +136,18 @@ public class StatusController implements HttpHandler {
                     }
                     break;
 
+                case "/simulation/speed":
+                    if ("GET".equals(method)) {
+                        String response = getSimulationSpeed();
+                        sendResponse(exchange, 200, response);
+                    } else if ("POST".equals(method)) {
+                        String response = setSimulationSpeed(exchange);
+                        sendResponse(exchange, 200, response);
+                    } else {
+                        sendErrorResponse(exchange, 405, "Method not allowed");
+                    }
+                    break;
+
                 default:
                     sendErrorResponse(exchange, 404, "Endpoint not found");
                     break;
@@ -719,6 +731,90 @@ public class StatusController implements HttpHandler {
                 
         } catch (Exception e) {
             return String.format("{\"status\":\"error\",\"message\":\"Error processing repair: %s\"}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Gets the current simulation speed
+     */
+    private String getSimulationSpeed() {
+        try {
+            int currentSpeed = serviceLauncher.getSimulationSpeed();
+            boolean isRunning = serviceLauncher.isSimulationRunning();
+            
+            return String.format("""
+                {
+                    "status": "success",
+                    "currentSpeed": %d,
+                    "unit": "milliseconds",
+                    "description": "Time between simulation ticks",
+                    "simulationRunning": %b,
+                    "timestamp": "%s"
+                }
+                """, currentSpeed, isRunning, LocalDateTime.now().format(formatter));
+                
+        } catch (Exception e) {
+            return String.format("{\"status\":\"error\",\"message\":\"Error getting simulation speed: %s\"}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Sets the simulation speed
+     * Expected JSON: {"speed": 1000}
+     */
+    private String setSimulationSpeed(HttpExchange exchange) throws IOException {
+        try {
+            // Read request body
+            BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody()));
+            StringBuilder requestBody = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                requestBody.append(line);
+            }
+            reader.close();
+            
+            // Parse JSON manually (simple parsing)
+            String json = requestBody.toString();
+            String speedStr = extractJsonValue(json, "speed");
+            
+            if (speedStr == null || speedStr.trim().isEmpty()) {
+                return "{\"status\":\"error\",\"message\":\"Speed value is required\"}";
+            }
+            
+            // Parse speed value
+            int newSpeed;
+            try {
+                newSpeed = Integer.parseInt(speedStr);
+            } catch (NumberFormatException e) {
+                return "{\"status\":\"error\",\"message\":\"Speed must be a valid integer\"}";
+            }
+            
+            // Validate speed range
+            if (newSpeed < 50) {
+                return "{\"status\":\"error\",\"message\":\"Speed must be at least 50 milliseconds\"}";
+            }
+            
+            if (newSpeed > 10000) {
+                return "{\"status\":\"error\",\"message\":\"Speed must not exceed 10000 milliseconds\"}";
+            }
+            
+            // Set the new speed
+            int oldSpeed = serviceLauncher.getSimulationSpeed();
+            serviceLauncher.setSimulationSpeed(newSpeed);
+            
+            return String.format("""
+                {
+                    "status": "success",
+                    "message": "Simulation speed updated successfully",
+                    "oldSpeed": %d,
+                    "newSpeed": %d,
+                    "unit": "milliseconds",
+                    "timestamp": "%s"
+                }
+                """, oldSpeed, newSpeed, LocalDateTime.now().format(formatter));
+                
+        } catch (Exception e) {
+            return String.format("{\"status\":\"error\",\"message\":\"Error setting simulation speed: %s\"}", e.getMessage());
         }
     }
     

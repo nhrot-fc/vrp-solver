@@ -148,7 +148,7 @@ public class ApiServiceLauncher {
             File ordersFile = dataPath.resolve("pedidos.20250419").resolve(ordersFileName).toFile();
 
             if (ordersFile.exists()) {
-                List<Order> orders = dataReader.loadOrders(ordersFile.getPath(), startTime, 48, 30); // Limit to 30 orders
+                List<Order> orders = dataReader.loadOrders(ordersFile.getPath(), startTime, 24*7, 1000000);
                 List<Event> orderEvents = new ArrayList<>();
                 
                 // Create ORDER_ARRIVAL events for each order
@@ -169,7 +169,7 @@ public class ApiServiceLauncher {
             File blockagesFile = dataPath.resolve("bloqueos.20250419").resolve(blockagesFileName).toFile();
 
             if (blockagesFile.exists()) {
-                List<Blockage> blockages = dataReader.loadBlockages(blockagesFile.getPath(), startTime, 48, 15); // Limit to 15 blockages
+                List<Blockage> blockages = dataReader.loadBlockages(blockagesFile.getPath(), startTime, 24*7, 100000); // Load all blockages for the week
                 List<Event> blockageEvents = new ArrayList<>();
                 
                 // Create BLOCKAGE_START and BLOCKAGE_END events for each blockage

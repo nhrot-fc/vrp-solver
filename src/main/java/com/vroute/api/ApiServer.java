@@ -57,6 +57,7 @@ public class ApiServer {
         server.createContext("/simulation/start", statusController);
         server.createContext("/simulation/pause", statusController);
         server.createContext("/simulation/status", statusController);
+        server.createContext("/simulation/speed", statusController);
         server.createContext("/vehicle/breakdown", statusController);
         server.createContext("/vehicle/repair", statusController);
         
@@ -74,6 +75,8 @@ public class ApiServer {
         logger.info("  GET /simulation/status - Get simulation status");
         logger.info("  POST /simulation/start - Start/resume simulation");
         logger.info("  POST /simulation/pause - Pause simulation");
+        logger.info("  GET /simulation/speed  - Get current simulation speed");
+        logger.info("  POST /simulation/speed - Set simulation speed (ms between ticks)");
         logger.info("  POST /vehicle/breakdown - Mark vehicle as broken down");
         logger.info("  POST /vehicle/repair    - Repair vehicle and make available");
         logger.info("  GET /health          - Health check");
