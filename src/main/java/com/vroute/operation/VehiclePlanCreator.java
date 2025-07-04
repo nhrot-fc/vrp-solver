@@ -16,21 +16,19 @@ import java.util.List;
  * 
  * Start:
  * - If vehicle is at main depot → Execute routine maintenance
- * - If delivery instruction location is blocked → Skip instruction
- * - If not enough GLP for delivery → Refill at nearest GLP depot
  * 
- * Core:
- * - Drive to order location
- * - Serve order
+ * Core Logic (for each delivery):
+ * 1. Check if need GLP → Go to nearest GLP depot (handles fuel automatically)
+ * 2. Go to order location (handles fuel automatically)
+ * 3. Serve order
  * 
  * End:
- * - Return to main depot
+ * - Return to main depot (handles fuel automatically)
  * 
- * Driving Logic:
- * - Calculate path
- * - If no path → Exception
- * - If not enough fuel → Go to main depot for refueling
- * - If not enough fuel to return to main depot or no path → Exception
+ * Simple Go-To-Location Logic:
+ * 1. Check if path exists → If not, return null
+ * 2. Check if has enough fuel → If not, go to fuel depot first
+ * 3. Go to location
  * 
  * Constraints:
  * - GLP can be refilled at any depot (main or auxiliary)
@@ -76,9 +74,40 @@ public class VehiclePlanCreator {
         return (path.size() - 1) * Constants.NODE_DISTANCE;
     }
 
+    /**
+     * Checks if there's a valid path to destination
+     */
+    public static boolean hasPath(Environment environment, Position from, Position to, LocalDateTime currentTime) {
+        if (from.equals(to)) {
+            return true;
+        }
+        List<Position> path = PathFinder.findPath(environment, from, to, currentTime);
+        return !path.isEmpty();
+    }
+
+    /**
+     * Checks if vehicle has enough fuel to reach destination
+     */
+    public static boolean hasEnoughFuel(Environment environment, Vehicle vehicle, Position destination, LocalDateTime currentTime) {
+        if (vehicle.getCurrentPosition().equals(destination)) {
+            return true;
+        }
+
+        List<Position> path = PathFinder.findPath(environment, vehicle.getCurrentPosition(), destination, currentTime);
+        if (path.isEmpty()) {
+            return false; // No path available
+        }
+
+        double distanceKm = calculatePathDistance(path);
+        double fuelConsumedGal = vehicle.calculateFuelNeeded(distanceKm);
+        return vehicle.getCurrentFuelGal() > fuelConsumedGal + Constants.EPSILON;
+    }
+
+    /**
+     * Simple drive method - assumes path and fuel checks are done beforehand
+     */
     public static LocalDateTime driveToLocation(Environment environment, Vehicle vehicle, Position destination,
-            LocalDateTime currentTime,
-            List<Action> actions) throws NoPathFoundException, InsufficientFuelException {
+            LocalDateTime currentTime, List<Action> actions) throws NoPathFoundException, InsufficientFuelException {
         if (vehicle.getCurrentPosition().equals(destination)) {
             return currentTime;
         }
@@ -108,21 +137,48 @@ public class VehiclePlanCreator {
         return currentTime.plus(duration);
     }
 
-    public static boolean canReach(Environment environment, Vehicle vehicle, Position destination,
-            LocalDateTime currentTime) {
-        if (vehicle.getCurrentPosition().equals(destination)) {
-            return true;
+    /**
+     * Tries to go to a location with the simple logic:
+     * 1. Check if path exists
+     * 2. Check if has enough fuel - if not, go to fuel depot first
+     * 3. Go to location
+     */
+    public static LocalDateTime goToLocation(Environment environment, Vehicle vehicle, Position destination,
+            LocalDateTime currentTime, List<Action> actions) {
+        try {
+            // 1. Check if path exists
+            if (!hasPath(environment, vehicle.getCurrentPosition(), destination, currentTime)) {
+                return null; // No path available
+            }
+
+            // 2. Check if has enough fuel
+            if (!hasEnoughFuel(environment, vehicle, destination, currentTime)) {
+                // Need to refuel first
+                Depot fuelDepot = environment.getMainDepot();
+                
+                // Check if can reach fuel depot
+                if (!hasPath(environment, vehicle.getCurrentPosition(), fuelDepot.getPosition(), currentTime) ||
+                    !hasEnoughFuel(environment, vehicle, fuelDepot.getPosition(), currentTime)) {
+                    return null; // Can't reach fuel depot
+                }
+                
+                // Go to fuel depot and refuel
+                currentTime = driveToLocation(environment, vehicle, fuelDepot.getPosition(), currentTime, actions);
+                currentTime = vehicleRefuel(vehicle, fuelDepot, currentTime, actions);
+                
+                // Check again if can reach destination after refueling
+                if (!hasPath(environment, vehicle.getCurrentPosition(), destination, currentTime) ||
+                    !hasEnoughFuel(environment, vehicle, destination, currentTime)) {
+                    return null; // Still can't reach destination
+                }
+            }
+
+            // 3. Go to location
+            return driveToLocation(environment, vehicle, destination, currentTime, actions);
+        } catch (NoPathFoundException | InsufficientFuelException e) {
+            System.err.println("Failed to go to location: " + e.getMessage());
+            return null;
         }
-
-        List<Position> path = PathFinder.findPath(environment, vehicle.getCurrentPosition(), destination, currentTime);
-        if (path.isEmpty()) {
-            return false;
-        }
-
-        double distanceKm = calculatePathDistance(path);
-        double fuelConsumedGal = vehicle.calculateFuelNeeded(distanceKm);
-
-        return vehicle.getCurrentFuelGal() > fuelConsumedGal + Constants.EPSILON;
     }
 
     public static LocalDateTime processFuelSupply(Environment environment, Vehicle vehicle, LocalDateTime currentTime,
@@ -130,7 +186,8 @@ public class VehiclePlanCreator {
         try {
             // Fuel can ONLY be obtained at the main depot
             Depot mainDepot = environment.getMainDepot();
-            if (!canReach(environment, vehicle, mainDepot.getPosition(), currentTime)) {
+            if (!hasPath(environment, vehicle.getCurrentPosition(), mainDepot.getPosition(), currentTime) ||
+                !hasEnoughFuel(environment, vehicle, mainDepot.getPosition(), currentTime)) {
                 return null;
             }
 
@@ -151,34 +208,22 @@ public class VehiclePlanCreator {
             Depot glpDepot = findNearestGLPDepot(environment.getAuxDepots(), vehicle.getCurrentPosition(), glpRequired,
                     environment.getMainDepot());
 
-            if (canReach(environment, vehicle, glpDepot.getPosition(), currentTime)) {
-                currentTime = driveToLocation(environment, vehicle, glpDepot.getPosition(), currentTime, actions);
-                currentTime = vehicleRefill(vehicle, glpDepot, glpRequired, currentTime, actions);
-            } else {
-                // Need to refuel first at the main depot
-                Depot fuelDepot = environment.getMainDepot();
-                if (!canReach(environment, vehicle, fuelDepot.getPosition(), currentTime)) {
-                    return null;
-                }
-
-                currentTime = driveToLocation(environment, vehicle, fuelDepot.getPosition(), currentTime, actions);
-                currentTime = vehicleRefuel(vehicle, fuelDepot, currentTime, actions);
-
-                if (!canReach(environment, vehicle, glpDepot.getPosition(), currentTime)) {
-                    return null;
-                }
-
-                currentTime = driveToLocation(environment, vehicle, glpDepot.getPosition(), currentTime, actions);
-                currentTime = vehicleRefill(vehicle, glpDepot, glpRequired, currentTime, actions);
+            // Use the new simple logic to go to GLP depot
+            currentTime = goToLocation(environment, vehicle, glpDepot.getPosition(), currentTime, actions);
+            if (currentTime == null) {
+                return null; // Couldn't reach GLP depot
             }
 
-            // If at main depot refuel
+            // Refill GLP
+            currentTime = vehicleRefill(vehicle, glpDepot, glpRequired, currentTime, actions);
+
+            // If at main depot, also refuel
             if (glpDepot == environment.getMainDepot()) {
                 currentTime = vehicleRefuel(vehicle, glpDepot, currentTime, actions);
             }
 
             return currentTime;
-        } catch (NoPathFoundException | InsufficientFuelException e) {
+        } catch (Exception e) {
             System.err.println("Failed to complete GLP supply: " + e.getMessage());
             return null;
         }
@@ -208,24 +253,7 @@ public class VehiclePlanCreator {
                 Order order = instruction.getOriginalOrder().clone();
                 Position orderPosition = order.getPosition();
                 
-                // Check if location is blocked (can't reach customer)
-                if (!canReach(environment, currentVehicle, orderPosition, currentTime)) {
-                    // Try to refuel first if it might be a fuel issue
-                    if (currentVehicle.getCurrentFuelGal() < currentVehicle.getFuelCapacityGal() * 0.3) {
-                        LocalDateTime updatedTime = processFuelSupply(environment, currentVehicle, currentTime, actions);
-                        
-                        // If refueling failed or still can't reach, skip this order
-                        if (updatedTime == null || !canReach(environment, currentVehicle, orderPosition, updatedTime)) {
-                            continue; // Skip this instruction
-                        }
-                        currentTime = updatedTime;
-                    } else {
-                        // Location is blocked for other reasons
-                        continue; // Skip this instruction
-                    }
-                }
-                
-                // Check if need GLP refill
+                // Check if need GLP refill before going to order
                 if (currentVehicle.getCurrentGlpM3() < instruction.getGlpAmountToDeliver()) {
                     int glpNeeded = currentVehicle.getGlpCapacityM3() - currentVehicle.getCurrentGlpM3();
                     // Go to nearest GLP depot to refill
@@ -236,56 +264,42 @@ public class VehiclePlanCreator {
                     currentTime = updatedTime;
                 }
                 
-                try {
-                    // Drive to customer location
-                    currentTime = driveToLocation(environment, currentVehicle, orderPosition, currentTime, actions);
-                    
-                    // Serve the order
-                    Action servingAction = ActionFactory.createServingAction(
-                            orderPosition,
-                            order,
-                            instruction.getGlpAmountToDeliver(),
-                            currentTime);
-                    actions.add(servingAction);
-                    
-                    currentVehicle.dispenseGlp(instruction.getGlpAmountToDeliver());
-                    currentTime = currentTime.plus(servingAction.getDuration());
-                } catch (NoPathFoundException e) {
-                    // Path blocked, skip this instruction
-                    continue;
-                } catch (InsufficientFuelException e) {
-                    // Not enough fuel (shouldn't happen due to previous checks)
-                    continue;
+                // Use simple logic to go to order location
+                LocalDateTime updatedTime = goToLocation(environment, currentVehicle, orderPosition, currentTime, actions);
+                if (updatedTime == null) {
+                    continue; // Skip if can't reach order location
                 }
+                currentTime = updatedTime;
+                
+                // Serve the order
+                Action servingAction = ActionFactory.createServingAction(
+                        orderPosition,
+                        order,
+                        instruction.getGlpAmountToDeliver(),
+                        currentTime);
+                actions.add(servingAction);
+                
+                currentVehicle.dispenseGlp(instruction.getGlpAmountToDeliver());
+                currentTime = currentTime.plus(servingAction.getDuration());
             }
 
             // END: Return to main depot if not already there
             if (!currentVehicle.getCurrentPosition().equals(mainDepot.getPosition())) {
-                // Check if can reach main depot
-                if (!canReach(environment, currentVehicle, mainDepot.getPosition(), currentTime)) {
-                    // Try to refuel first
-                    LocalDateTime updatedTime = processFuelSupply(environment, currentVehicle, currentTime, actions);
-                    if (updatedTime == null) {
-                        // Can't reach main depot even after refuel attempt
-                        return null;
-                    }
-                    currentTime = updatedTime;
-                }
-                
-                try {
-                    // Drive to main depot
-                    currentTime = driveToLocation(environment, currentVehicle, mainDepot.getPosition(), currentTime, actions);
-                    
-                    // Perform maintenance at main depot
-                    Action maintenanceAction = ActionFactory.createMaintenanceAction(
-                            mainDepot.getPosition(),
-                            Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES),
-                            currentTime);
-                    actions.add(maintenanceAction);
-                    currentTime = currentTime.plus(maintenanceAction.getDuration());
-                } catch (NoPathFoundException | InsufficientFuelException e) {
+                // Use simple logic to go to main depot
+                LocalDateTime updatedTime = goToLocation(environment, currentVehicle, mainDepot.getPosition(), currentTime, actions);
+                if (updatedTime == null) {
+                    // Can't reach main depot
                     return null;
                 }
+                currentTime = updatedTime;
+                
+                // Perform maintenance at main depot
+                Action maintenanceAction = ActionFactory.createMaintenanceAction(
+                        mainDepot.getPosition(),
+                        Duration.ofMinutes(Constants.ROUTINE_MAINTENANCE_MINUTES),
+                        currentTime);
+                actions.add(maintenanceAction);
+                currentTime = currentTime.plus(maintenanceAction.getDuration());
             }
 
             return new VehiclePlan(currentVehicle, actions, planStartTime);
@@ -310,14 +324,12 @@ public class VehiclePlanCreator {
             if (!currentVehicle.getCurrentPosition().equals(mainDepot.getPosition())) {
                 LocalDateTime currentTime = planStartTime;
 
-                // Check if need to refuel first
-                if (!canReach(environment, currentVehicle, mainDepot.getPosition(), currentTime)) {
-                    // Can't reach main depot with current fuel
+                // Use simple logic to go to main depot
+                currentTime = goToLocation(environment, currentVehicle, mainDepot.getPosition(), currentTime, actions);
+                if (currentTime == null) {
+                    // Can't reach main depot
                     return null;
                 }
-
-                // Drive to main depot
-                currentTime = driveToLocation(environment, currentVehicle, mainDepot.getPosition(), currentTime, actions);
                 
                 // Perform maintenance at main depot
                 Action maintenanceAction = ActionFactory.createMaintenanceAction(
@@ -330,7 +342,7 @@ public class VehiclePlanCreator {
             }
             
             return null; // No plan needed if already at main depot
-        } catch (NoPathFoundException | InsufficientFuelException e) {
+        } catch (Exception e) {
             System.err.println("Failed to create plan to main depot: " + e.getMessage());
             return null;
         }
@@ -344,6 +356,6 @@ public class VehiclePlanCreator {
                 .filter(depot -> depot.getCurrentGlpM3() >= glpNeeded)
                 .min((d1, d2) -> Double.compare(currentPosition.distanceTo(d1.getPosition()),
                         currentPosition.distanceTo(d2.getPosition())))
-                .orElse(mainDepot);
+                .orElse(mainDepot).clone();
     }
 }

@@ -80,18 +80,11 @@ public class ApiServiceLauncher {
     
     private void createEnvironment(LocalDateTime startTime) {
         // Create main depot
-        Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 10000, true);
+        Depot mainDepot = new Depot(Constants.MAIN_PLANT_ID, Constants.CENTRAL_STORAGE_LOCATION, 100000, true);
         mainDepot.refillGLP(); // Start with full capacity
-        
-        // Create auxiliary depots
         List<Depot> auxDepots = createAuxiliaryDepots();
-        
-        // Create vehicle fleet
         List<Vehicle> vehicles = createVehicleFleet(mainDepot.getPosition());
-        
-        // Create environment
         environment = new Environment(vehicles, mainDepot, auxDepots, startTime);
-        
         logger.info("Environment created with " + vehicles.size() + " vehicles and " + auxDepots.size() + " auxiliary depots");
     }
     
@@ -99,12 +92,12 @@ public class ApiServiceLauncher {
         List<Depot> depots = new ArrayList<>();
         
         // North intermediate storage
-        Depot northDepot = new Depot("NORTH_DEPOT", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 5000, false);
+        Depot northDepot = new Depot("NORTH_DEPOT", Constants.NORTH_INTERMEDIATE_STORAGE_LOCATION, 500, true);
         northDepot.refillGLP();
         depots.add(northDepot);
         
         // East intermediate storage
-        Depot eastDepot = new Depot("EAST_DEPOT", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 3000, false);
+        Depot eastDepot = new Depot("EAST_DEPOT", Constants.EAST_INTERMEDIATE_STORAGE_LOCATION, 500, true);
         eastDepot.refillGLP();
         depots.add(eastDepot);
         

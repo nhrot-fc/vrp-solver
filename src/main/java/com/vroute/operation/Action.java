@@ -6,6 +6,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import com.vroute.models.Constants;
+import com.vroute.models.Depot;
 import com.vroute.models.Environment;
 import com.vroute.models.Order;
 import com.vroute.models.Position;
@@ -21,7 +22,8 @@ public class Action {
 
     // Serving specific attributes
     private final int glpChangeM3;
-    private final Order order;
+    private final Order order; // Keep for backward compatibility
+    private final String orderId; // Use ID to find in environment
 
     // Driving specific attributes
     private final double fuelChangeGal;
@@ -36,6 +38,7 @@ public class Action {
         this.expectedStartTime = expectedStartTime;
         this.expectedEndTime = expectedEndTime;
         this.order = order;
+        this.orderId = (order != null) ? order.getId() : null;
         this.glpChangeM3 = glpChangeM3;
         this.fuelChangeGal = fuelChangeGal;
     }
@@ -68,6 +71,10 @@ public class Action {
         return order;
     }
 
+    public String getOrderId() {
+        return orderId;
+    }
+
     public double getFuelChangeGal() {
         return fuelChangeGal;
     }
@@ -82,12 +89,11 @@ public class Action {
             return;
         }
 
-        boolean actionCompleted = !currentTime.isBefore(expectedEndTime);
         double progressRatio = calculateProgressRatio(currentTime);
 
         // System.out.println(
-        //         String.format("Executing action: %s | Progress: %.2f%% | Time: %s",
-        //                 this, progressRatio * 100, currentTime));
+        // String.format("Executing action: %s | Progress: %.2f%% | Time: %s",
+        // this, progressRatio * 100, currentTime));
         switch (type) {
             case DRIVE:
                 if (path != null && path.size() > 1) {
@@ -96,19 +102,10 @@ public class Action {
                     if (pathProgress >= 0) {
                         Position currentPosition = path.get(pathProgress);
                         vehicle.setCurrentPosition(currentPosition);
-
-                        if (actionCompleted) {
-                            vehicle.consumeFuel(Math.abs(fuelChangeGal));
-                        } else if (pathProgress > 0) {
-                            double partialDistance = calculatePartialPathDistance(0, pathProgress);
-                            double fuelConsumed = (partialDistance / calculatePartialPathDistance(0, path.size() - 1))
-                                    * Math.abs(fuelChangeGal);
-                            vehicle.consumeFuel(fuelConsumed);
-                        }
-                    }
-
-                    if (actionCompleted) {
-                        vehicle.setCurrentPosition(destination);
+                        double partialDistance = calculatePartialPathDistance(0, pathProgress);
+                        double fuelConsumed = (partialDistance / calculatePartialPathDistance(0, path.size() - 1))
+                                * Math.abs(fuelChangeGal);
+                        vehicle.consumeFuel(fuelConsumed);
                     }
                 }
 
@@ -116,27 +113,39 @@ public class Action {
                 break;
             case REFUEL:
                 vehicle.setStatus(VehicleStatus.REFUELING);
-                if (actionCompleted) {
-                    // El repostaje se completa al final
-                    vehicle.refuel();
-                }
+                vehicle.refuel();
                 break;
 
             case RELOAD:
                 vehicle.setStatus(VehicleStatus.RELOADING);
-                if (actionCompleted) {
-                    vehicle.refill(glpChangeM3);
+                vehicle.refill(glpChangeM3);
+                // Update depot inventory - find depot by position
+                Depot depot = findDepotByPosition(environment, destination);
+                if (depot != null) {
+                    depot.serveGLP(glpChangeM3);
                 }
                 break;
 
             case SERVE:
                 vehicle.setStatus(VehicleStatus.SERVING);
-                vehicle.serveOrder(order, glpChangeM3, currentTime);
+                // Find the actual order in the environment using its ID
+                if (orderId != null) {
+                    Order environmentOrder = environment.findOrderById(orderId);
+                    if (environmentOrder != null) {
+                        vehicle.serveOrder(environmentOrder, glpChangeM3, currentTime);
+                    } else {
+                        // Fallback to the original order if not found in environment
+                        vehicle.serveOrder(order, glpChangeM3, currentTime);
+                    }
+                } else {
+                    // Fallback to the original order if no ID available
+                    vehicle.serveOrder(order, glpChangeM3, currentTime);
+                }
                 break;
 
             case MAINTENANCE:
                 // Mantenimiento programado - estado progresivo
-                //vehicle.setStatus(VehicleStatus.MAINTENANCE);
+                // vehicle.setStatus(VehicleStatus.MAINTENANCE);
                 break;
 
             case WAIT:
@@ -194,6 +203,31 @@ public class Action {
 
         double elapsedMinutes = Duration.between(expectedStartTime, currentTime).toMinutes();
         return Math.min(1.0, elapsedMinutes / totalDurationMinutes);
+    }
+
+    /**
+     * Finds a depot by its position
+     * @param environment The environment to search in
+     * @param position The position to match
+     * @return The depot at the given position, or null if not found
+     */
+    private Depot findDepotByPosition(Environment environment, Position position) {
+        final double POSITION_TOLERANCE = 0.01; // Small tolerance in kilometers
+        
+        // Check main depot
+        Depot mainDepot = environment.getMainDepot();
+        if (mainDepot != null && mainDepot.getPosition().distanceTo(position) <= POSITION_TOLERANCE) {
+            return mainDepot;
+        }
+        
+        // Check auxiliary depots
+        for (Depot depot : environment.getAuxDepots()) {
+            if (depot.getPosition().distanceTo(position) <= POSITION_TOLERANCE) {
+                return depot;
+            }
+        }
+        
+        return null;
     }
 
     @Override

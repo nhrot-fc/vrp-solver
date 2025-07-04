@@ -68,7 +68,7 @@ public class Vehicle {
         // Ensure we don't exceed the vehicle's capacity
         int availableSpace = this.glpCapacityM3 - this.currentGlpM3;
         int actualRefillAmount = Math.min(glpVolumeM3, availableSpace);
-        this.currentGlpM3 += actualRefillAmount;
+        this.currentGlpM3 = Math.min(this.glpCapacityM3, this.currentGlpM3 + actualRefillAmount);
     }
 
     public void serveOrder(Order order, int glpVolumeM3, LocalDateTime serveDate) {

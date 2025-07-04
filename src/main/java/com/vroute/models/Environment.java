@@ -73,12 +73,6 @@ public class Environment {
         orderQueue.addAll(orders);
     }
 
-    public int removeDeliveredOrders() {
-        int initialSize = orderQueue.size();
-        orderQueue.removeIf(Order::isDelivered);
-        return initialSize - orderQueue.size();
-    }
-
     public List<Order> getPendingOrders() {
         return orderQueue.stream()
                 .filter(order -> !order.isDelivered())
@@ -191,6 +185,12 @@ public class Environment {
         for (Depot depot : auxDepots) {
             depot.refillGLP();
         }
+
+        // remove delivered orders
+        orderQueue.removeIf(Order::isDelivered);
+
+        // remove past blockages
+        activeBlockages.removeIf(blockage -> blockage.getEndTime().isBefore(currentTime));
     }
 
     public List<Vehicle> getAvailableVehicles() {
@@ -201,8 +201,49 @@ public class Environment {
                 .collect(Collectors.toList());
     }
 
-    public void clearAllOrders() {
-        orderQueue.clear();
+    /**
+     * Finds an order by its ID in the environment
+     * 
+     * @param orderId The ID of the order to find
+     * @return The order if found, null otherwise
+     */
+    public Order findOrderById(String orderId) {
+        return orderQueue.stream()
+                .filter(order -> order.getId().equals(orderId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Finds a depot by its ID in the environment
+     * 
+     * @param depotId The ID of the depot to find
+     * @return The depot if found, null otherwise
+     */
+    public Depot findDepotById(String depotId) {
+        // Check main depot first
+        if (mainDepot.getId().equals(depotId)) {
+            return mainDepot;
+        }
+
+        // Check auxiliary depots
+        return auxDepots.stream()
+                .filter(depot -> depot.getId().equals(depotId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Finds a vehicle by its ID in the environment
+     * 
+     * @param vehicleId The ID of the vehicle to find
+     * @return The vehicle if found, null otherwise
+     */
+    public Vehicle findVehicleById(String vehicleId) {
+        return vehicles.stream()
+                .filter(vehicle -> vehicle.getId().equals(vehicleId))
+                .findFirst()
+                .orElse(null);
     }
 
     @Override

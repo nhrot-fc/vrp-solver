@@ -19,7 +19,7 @@ public class Order implements Stop {
     public Order(String id, LocalDateTime arriveDate, LocalDateTime dueDate, int glpRequestM3, Position position) {
         this.id = id;
         this.arriveTime = arriveDate;
-        this.dueTime = dueDate;
+        this.dueTime = dueDate.plusHours(4);
         this.glpRequestM3 = glpRequestM3;
         this.position = position;
 
@@ -59,7 +59,7 @@ public class Order implements Stop {
 
     // Operations
     public void recordDelivery(int deliveredVolumeM3, String vehicleId, LocalDateTime serveDate) {
-        remainingGlpM3 -= deliveredVolumeM3;
+        remainingGlpM3 -= Math.abs(deliveredVolumeM3);
         records.add(new ServeRecord(vehicleId, id, deliveredVolumeM3, serveDate));
     }
 

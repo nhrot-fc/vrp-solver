@@ -55,7 +55,6 @@ public class SimulationApp extends JFrame {
         // Initialize simulation environment with starting date
         LocalDateTime simulationStartTime = LocalDateTime.of(2025, 1, 1, 0, 0, 0);
         initializeEnvironment(simulationStartTime);
-        // Load data from files (after UI is initialized)
         loadDataFromFiles(simulationStartTime);
 
         // Initialize the orchestrator
