@@ -7,20 +7,10 @@ import com.vroute.orchest.Event;
 import com.vroute.orchest.EventType;
 import com.vroute.orchest.Orchestrator;
 
-import javafx.animation.Animation;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
-import javafx.application.Application;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
-import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
-import javafx.stage.Stage;
-import javafx.util.Duration;
-
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-public class SimulationApp extends Application {
+public class SimulationApp extends JFrame {
     private static final int GRID_WIDTH = 70;
     private static final int GRID_HEIGHT = 50;
     private static final int CELL_SIZE = 20;
@@ -43,14 +33,14 @@ public class SimulationApp extends Application {
     private DataReader dataReader;
 
     // UI components
-    private Pane mapPane;
-    private VBox statusBox;
-    private VBox planDetailsBox;
-    private Label simulationTimeLabel;
-    private Label statusLabel;
-    private ProgressBar simulationProgress;
-    private Timeline simulationTimeline;
-    private StringProperty currentTimeProperty = new SimpleStringProperty();
+    private JPanel mapPanel;
+    private JPanel statusPanel;
+    private JPanel planDetailsPanel;
+    private JLabel simulationTimeLabel;
+    private JLabel statusLabel;
+    private JProgressBar simulationProgress;
+    private Timer simulationTimer;
+    private String currentTimeText = "";
 
     // Simulation speed (milliseconds between steps)
     private int simulationSpeed = 500;
@@ -58,8 +48,7 @@ public class SimulationApp extends Application {
     // event list
     private List<Event> eventList = new ArrayList<>();
 
-    @Override
-    public void start(Stage primaryStage) {
+    public SimulationApp() {
         // Initialize the data reader
         dataReader = new DataReader();
 
@@ -72,14 +61,9 @@ public class SimulationApp extends Application {
         // Initialize the orchestrator
         orchestrator = new Orchestrator(environment);
         orchestrator.addEvents(eventList);
-        // Create UI first
-        BorderPane root = createUI();
-
-        // Configure and show the stage
-        Scene scene = new Scene(root, 1280, 800);
-        primaryStage.setTitle("V-Route Delivery Planning Simulation");
-        primaryStage.setScene(scene);
-        primaryStage.show();
+        
+        // Create UI
+        createUI();
 
         // Update time display
         updateTimeDisplay();
@@ -88,94 +72,95 @@ public class SimulationApp extends Application {
         drawEnvironment();
     }
 
-    private BorderPane createUI() {
-        BorderPane root = new BorderPane();
+    private void createUI() {
+        setTitle("V-Route Delivery Planning Simulation");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(1280, 800);
+        setLocationRelativeTo(null);
+
+        // Create main layout
+        setLayout(new BorderLayout());
 
         // Map area (center)
-        mapPane = new Pane();
-        mapPane.setPrefSize(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE);
-        ScrollPane mapScrollPane = new ScrollPane(mapPane);
-        mapScrollPane.setPrefViewportHeight(720);
-        mapScrollPane.setPrefViewportWidth(1080);
-        root.setCenter(mapScrollPane);
+        mapPanel = new MapPanel();
+        mapPanel.setPreferredSize(new Dimension(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE));
+        JScrollPane mapScrollPane = new JScrollPane(mapPanel);
+        mapScrollPane.setPreferredSize(new Dimension(1080, 720));
+        add(mapScrollPane, BorderLayout.CENTER);
 
         // Status and controls (top)
-        HBox topBar = new HBox(20);
-        topBar.setPadding(new Insets(10));
-        topBar.setAlignment(Pos.CENTER_LEFT);
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
 
-        simulationTimeLabel = new Label();
-        simulationTimeLabel.textProperty().bind(currentTimeProperty);
-        simulationTimeLabel.setStyle("-fx-font-weight: bold;");
+        simulationTimeLabel = new JLabel();
+        simulationTimeLabel.setText(currentTimeText);
+        simulationTimeLabel.setFont(simulationTimeLabel.getFont().deriveFont(Font.BOLD));
 
-        statusLabel = new Label("Ready");
-        statusLabel.setStyle("-fx-text-fill: blue;");
+        statusLabel = new JLabel("Ready");
+        statusLabel.setForeground(Color.BLUE);
 
-        simulationProgress = new ProgressBar(0);
-        simulationProgress.setPrefWidth(200);
+        simulationProgress = new JProgressBar(0, 100);
+        simulationProgress.setPreferredSize(new Dimension(200, 20));
+        simulationProgress.setStringPainted(true);
 
-        topBar.getChildren().addAll(new Label("Simulation Time:"), simulationTimeLabel,
-                new Label("Status:"), statusLabel, simulationProgress);
-        root.setTop(topBar);
+        topPanel.add(new JLabel("Simulation Time:"));
+        topPanel.add(simulationTimeLabel);
+        topPanel.add(new JLabel("Status:"));
+        topPanel.add(statusLabel);
+        topPanel.add(simulationProgress);
+        add(topPanel, BorderLayout.NORTH);
 
         // Sidebar for plan details and stats (right)
-        VBox rightPanel = new VBox(10);
-        rightPanel.setPadding(new Insets(10));
-        rightPanel.setPrefWidth(300);
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.setPreferredSize(new Dimension(300, 0));
 
         // Status box
-        statusBox = new VBox(5);
-        statusBox.setPadding(new Insets(10));
-        statusBox.setStyle("-fx-border-color: #cccccc; -fx-border-radius: 5;");
-        Label statusHeader = new Label("Simulation Status");
-        statusHeader.setStyle("-fx-font-weight: bold;");
-        statusBox.getChildren().add(statusHeader);
-
+        statusPanel = new JPanel();
+        statusPanel.setLayout(new BoxLayout(statusPanel, BoxLayout.Y_AXIS));
+        statusPanel.setBorder(BorderFactory.createTitledBorder("Simulation Status"));
+        
         // Plan details box
-        planDetailsBox = new VBox(5);
-        planDetailsBox.setPadding(new Insets(10));
-        planDetailsBox.setStyle("-fx-border-color: #cccccc; -fx-border-radius: 5;");
-        Label plansHeader = new Label("Vehicle Plans");
-        plansHeader.setStyle("-fx-font-weight: bold;");
-        planDetailsBox.getChildren().add(plansHeader);
+        planDetailsPanel = new JPanel();
+        planDetailsPanel.setLayout(new BoxLayout(planDetailsPanel, BoxLayout.Y_AXIS));
+        planDetailsPanel.setBorder(BorderFactory.createTitledBorder("Vehicle Plans"));
 
-        ScrollPane planDetailsScrollPane = new ScrollPane(planDetailsBox);
-        planDetailsScrollPane.setFitToWidth(true);
+        JScrollPane planDetailsScrollPane = new JScrollPane(planDetailsPanel);
+        planDetailsScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 
-        rightPanel.getChildren().addAll(statusBox, planDetailsScrollPane);
-        root.setRight(rightPanel);
+        rightPanel.add(statusPanel, BorderLayout.NORTH);
+        rightPanel.add(planDetailsScrollPane, BorderLayout.CENTER);
+        add(rightPanel, BorderLayout.EAST);
 
         // Controls (bottom)
-        HBox controlsBox = new HBox(10);
-        controlsBox.setPadding(new Insets(10));
-        controlsBox.setAlignment(Pos.CENTER);
+        JPanel controlsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
 
-        Button startButton = new Button("Start Simulation");
-        startButton.setOnAction(e -> startSimulation());
+        JButton startButton = new JButton("Start Simulation");
+        startButton.addActionListener(e -> startSimulation());
 
-        Button pauseButton = new Button("Pause");
-        pauseButton.setOnAction(e -> pauseSimulation());
+        JButton pauseButton = new JButton("Pause");
+        pauseButton.addActionListener(e -> pauseSimulation());
 
-        Button stopButton = new Button("Stop");
-        stopButton.setOnAction(e -> stopSimulation());
+        JButton stopButton = new JButton("Stop");
+        stopButton.addActionListener(e -> stopSimulation());
 
-        Slider speedSlider = new Slider(0.5, 10.0, 0.5);
-        speedSlider.setShowTickMarks(true);
-        speedSlider.setShowTickLabels(true);
-        speedSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
-            simulationSpeed = (int) (500 / newVal.doubleValue());
-            if (simulationTimeline != null && simulationTimeline.getStatus() == Animation.Status.RUNNING) {
+        JSlider speedSlider = new JSlider(JSlider.HORIZONTAL, 1, 20, 1);
+        speedSlider.setMajorTickSpacing(5);
+        speedSlider.setMinorTickSpacing(1);
+        speedSlider.setPaintTicks(true);
+        speedSlider.setPaintLabels(true);
+        speedSlider.addChangeListener(e -> {
+            simulationSpeed = (int) (500 / speedSlider.getValue());
+            if (simulationTimer != null && simulationTimer.isRunning()) {
                 pauseSimulation();
                 startSimulation();
             }
         });
 
-        controlsBox.getChildren().addAll(
-                new Label("Speed:"), speedSlider,
-                startButton, pauseButton, stopButton);
-        root.setBottom(controlsBox);
-
-        return root;
+        controlsPanel.add(new JLabel("Speed:"));
+        controlsPanel.add(speedSlider);
+        controlsPanel.add(startButton);
+        controlsPanel.add(pauseButton);
+        controlsPanel.add(stopButton);
+        add(controlsPanel, BorderLayout.SOUTH);
     }
 
     private void initializeEnvironment(LocalDateTime startTime) {
@@ -301,7 +286,7 @@ public class SimulationApp extends Application {
     }
 
     private void startSimulation() {
-        if (simulationTimeline != null && simulationTimeline.getStatus() == Animation.Status.RUNNING) {
+        if (simulationTimer != null && simulationTimer.isRunning()) {
             return; // Simulation already running
         }
 
@@ -323,31 +308,33 @@ public class SimulationApp extends Application {
 
         updateStatus("Simulation running");
 
-        // Create a timeline for simulation steps
-        simulationTimeline = new Timeline(new KeyFrame(Duration.millis(simulationSpeed), e -> {
-            try {
-                updateSimulationStep();
-            } catch (Exception ex) {
-                updateStatus("Error during simulation: " + ex.getMessage());
-                logger.severe("Simulation error: " + ex.getMessage());
-                ex.printStackTrace();
-                pauseSimulation();
+        // Create a timer for simulation steps
+        simulationTimer = new Timer(simulationSpeed, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    updateSimulationStep();
+                } catch (Exception ex) {
+                    updateStatus("Error during simulation: " + ex.getMessage());
+                    logger.severe("Simulation error: " + ex.getMessage());
+                    ex.printStackTrace();
+                    pauseSimulation();
+                }
             }
-        }));
-        simulationTimeline.setCycleCount(Animation.INDEFINITE);
-        simulationTimeline.play();
+        });
+        simulationTimer.start();
     }
 
     private void pauseSimulation() {
-        if (simulationTimeline != null && simulationTimeline.getStatus() == Animation.Status.RUNNING) {
-            simulationTimeline.pause();
+        if (simulationTimer != null && simulationTimer.isRunning()) {
+            simulationTimer.stop();
             updateStatus("Simulation paused");
         }
     }
 
     private void stopSimulation() {
-        if (simulationTimeline != null) {
-            simulationTimeline.stop();
+        if (simulationTimer != null) {
+            simulationTimer.stop();
         }
         updateStatus("Simulation stopped");
     }
@@ -371,7 +358,10 @@ public class SimulationApp extends Application {
     private void updateTimeDisplay() {
         LocalDateTime simulationTime = environment.getCurrentTime();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-        currentTimeProperty.set(simulationTime.format(formatter));
+        currentTimeText = simulationTime.format(formatter);
+        if (simulationTimeLabel != null) {
+            simulationTimeLabel.setText(currentTimeText);
+        }
     }
 
     private void updateStatus(String status) {
@@ -379,14 +369,16 @@ public class SimulationApp extends Application {
         if (statusLabel != null) {
             statusLabel.setText(status);
 
-            // Add to status history if the box is initialized
-            if (statusBox != null) {
-                Label statusHistoryLabel = new Label(
+            // Add to status history if the panel is initialized
+            if (statusPanel != null) {
+                JLabel statusHistoryLabel = new JLabel(
                         environment.getCurrentTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " - " + status);
-                if (statusBox.getChildren().size() > 20) {
-                    statusBox.getChildren().remove(1); // Keep the header
+                if (statusPanel.getComponentCount() > 20) {
+                    statusPanel.remove(1); // Keep the header
                 }
-                statusBox.getChildren().add(statusHistoryLabel);
+                statusPanel.add(statusHistoryLabel);
+                statusPanel.revalidate();
+                statusPanel.repaint();
             }
         }
 
@@ -398,15 +390,15 @@ public class SimulationApp extends Application {
         // Update simulation progress - assume we're showing a day's worth of progress
         double progressValue = (environment.getCurrentTime().getHour() * 60 + environment.getCurrentTime().getMinute())
                 / (24.0 * 60);
-        simulationProgress.setProgress(Math.min(1.0, progressValue));
+        simulationProgress.setValue((int) (Math.min(1.0, progressValue) * 100));
         
-        // Update plan details box with current order and blockage statistics
-        if (planDetailsBox != null) {
-            planDetailsBox.getChildren().clear();
+        // Update plan details panel with current order and blockage statistics
+        if (planDetailsPanel != null) {
+            planDetailsPanel.removeAll();
             
-            Label plansHeader = new Label("Simulation Statistics");
-            plansHeader.setStyle("-fx-font-weight: bold;");
-            planDetailsBox.getChildren().add(plansHeader);
+            JLabel plansHeader = new JLabel("Simulation Statistics");
+            plansHeader.setFont(plansHeader.getFont().deriveFont(Font.BOLD));
+            planDetailsPanel.add(plansHeader);
             
             // Order stats
             int totalOrders = environment.getOrderQueue().size();
@@ -414,21 +406,21 @@ public class SimulationApp extends Application {
             int deliveredOrders = totalOrders - pendingOrders;
             int overdueOrders = environment.getOverdueOrders().size();
             
-            planDetailsBox.getChildren().add(new Label(String.format("Orders: %d total, %d delivered, %d pending, %d overdue",
+            planDetailsPanel.add(new JLabel(String.format("Orders: %d total, %d delivered, %d pending, %d overdue",
                     totalOrders, deliveredOrders, pendingOrders, overdueOrders)));
             
             // Blockage stats
             int activeBlockages = environment.getActiveBlockagesAt(environment.getCurrentTime()).size();
-            planDetailsBox.getChildren().add(new Label(String.format("Active blockages: %d", activeBlockages)));
+            planDetailsPanel.add(new JLabel(String.format("Active blockages: %d", activeBlockages)));
             
             // Vehicle stats
             int availableVehicles = environment.getAvailableVehicles().size();
             int totalVehicles = environment.getVehicles().size();
-            planDetailsBox.getChildren().add(new Label(String.format("Vehicles: %d/%d available", 
+            planDetailsPanel.add(new JLabel(String.format("Vehicles: %d/%d available", 
                     availableVehicles, totalVehicles)));
             
             // Add each vehicle plan summary
-            planDetailsBox.getChildren().add(new Label("Vehicle Plans:"));
+            planDetailsPanel.add(new JLabel("Vehicle Plans:"));
             for (Map.Entry<Vehicle, VehiclePlan> entry : orchestrator.getVehiclePlans().entrySet()) {
                 Vehicle vehicle = entry.getKey();
                 VehiclePlan plan = entry.getValue();
@@ -437,36 +429,64 @@ public class SimulationApp extends Application {
                 String planSummary = plan != null ? 
                         String.format("%d actions, %d orders", plan.getActions().size(), plan.getOrderCount()) : "No plan";
                 
-                planDetailsBox.getChildren().add(new Label(String.format("  %s (%s): %s", 
+                planDetailsPanel.add(new JLabel(String.format("  %s (%s): %s", 
                         vehicle.getId(), status, planSummary)));
             }
+            
+            planDetailsPanel.revalidate();
+            planDetailsPanel.repaint();
         }
     }
 
     private void drawEnvironment() {
-        mapPane.getChildren().clear();
-
-        // Get the current simulation time
-        LocalDateTime currentTime = environment.getCurrentTime();
-
-        // Draw the grid
-        MapRenderer.drawGrid(mapPane, GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
-
-        // Draw depots
-        MapRenderer.drawDepots(mapPane, environment.getAuxDepots(), environment.getMainDepot(), CELL_SIZE);
-
-        // Draw orders
-        MapRenderer.drawOrders(mapPane, environment.getPendingOrders(), environment, CELL_SIZE);
-
-        // Draw blockages
-        MapRenderer.drawBlockages(mapPane, environment, currentTime, CELL_SIZE);
-
-        // Draw vehicles
-        MapRenderer.drawVehicles(mapPane, environment.getAvailableVehicles(), CELL_SIZE);
-
-        // Draw vehicle plans if available
-        for (VehiclePlan plan : orchestrator.getVehiclePlans().values()) {
-            MapRenderer.drawCurrentVehiclePath(mapPane, plan, currentTime, CELL_SIZE);
+        if (mapPanel != null) {
+            mapPanel.repaint();
         }
+    }
+
+    // Custom JPanel for rendering the map
+    private class MapPanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Get the current simulation time
+            LocalDateTime currentTime = environment.getCurrentTime();
+
+            // Draw the grid
+            SwingMapRenderer.drawGrid(g2d, GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
+
+            // Draw depots
+            SwingMapRenderer.drawDepots(g2d, environment.getAuxDepots(), environment.getMainDepot(), CELL_SIZE);
+
+            // Draw orders
+            SwingMapRenderer.drawOrders(g2d, environment.getPendingOrders(), environment, CELL_SIZE);
+
+            // Draw blockages
+            SwingMapRenderer.drawBlockages(g2d, environment, currentTime, CELL_SIZE);
+
+            // Draw vehicles
+            SwingMapRenderer.drawVehicles(g2d, environment.getAvailableVehicles(), CELL_SIZE);
+
+            // Draw vehicle plans if available
+            for (VehiclePlan plan : orchestrator.getVehiclePlans().values()) {
+                SwingMapRenderer.drawCurrentVehiclePath(g2d, plan, currentTime, CELL_SIZE);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // UIManager.setLookAndFeel(UIManager.getSystemLookAndFeel());
+            } catch (Exception e) {
+                // Use default look and feel
+            }
+            
+            SimulationApp app = new SimulationApp();
+            app.setVisible(true);
+        });
     }
 }

@@ -11,54 +11,36 @@ BIN_DIR = out
 # Directorio de bibliotecas JavaFX
 LIB_DIR = lib
 
-# Obtener todas las JARs de JavaFX para el classpath
-JAVAFX_JARS = $(shell find $(LIB_DIR) -name '*.jar' | tr '\n' ':')
-
 # Nombre completo de la clase principal (con paquete)
 MAIN_CLASS = com.vroute.Main
 SIMULATION_CLASS = com.vroute.SimulationLauncher
 ROUTING_CLASS = com.vroute.RoutingApplication
 API_SERVICE_CLASS = com.vroute.api.ApiServiceLauncher
+PORT = 8080
 
 # Regla por defecto
-all: compile-all
+all: compile
 
-# Regla para compilar todo
-compile-all: compile-fx compile-api
-
-# Compilar componentes que requieren JavaFX
-compile-fx:
+# Compilar todo el proyecto
+compile: clean
 	@echo "Creando directorio de salida: $(BIN_DIR)..."
 	@mkdir -p $(BIN_DIR)
-	@echo "Compilando componentes con JavaFX..."
-	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -cp $(JAVAFX_JARS) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/Main.java $(SRC_ROOT)/com/vroute/SimulationLauncher.java
-	@echo "Compilación de componentes con JavaFX finalizada."
-
-# Compilar componentes API (sin dependencia de JavaFX)
-compile-api:
-	@echo "Creando directorio de salida: $(BIN_DIR)..."
-	@mkdir -p $(BIN_DIR)
-	@echo "Compilando componentes API (sin JavaFX)..."
-	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/api/ApiServiceLauncher.java
-	@echo "Compilación de API finalizada."
+	@echo "Compilando todo el proyecto..."
+	$(JC) --release $(JAVA_VERSION) -d $(BIN_DIR) -sourcepath $(SRC_ROOT) $(SRC_ROOT)/com/vroute/**/*.java $(SRC_ROOT)/com/vroute/*.java
+	@echo "Compilación finalizada."
 
 # Regla para ejecutar la aplicación principal
-run: compile-fx
-	@echo "Ejecutando $(MAIN_CLASS) con JavaFX..."
-	java --module-path $(LIB_DIR) --add-modules javafx.controls,javafx.fxml -cp $(BIN_DIR):$(JAVAFX_JARS) $(MAIN_CLASS)
+run: compile
+	@echo "Ejecutando $(MAIN_CLASS)..."
+	java -cp $(BIN_DIR) $(MAIN_CLASS)
 
 # Regla para ejecutar el simulador con visualización
-run-simulation: compile-fx
-	@echo "Ejecutando $(SIMULATION_CLASS) con JavaFX..."
-	java --module-path $(LIB_DIR) --add-modules javafx.controls,javafx.fxml -cp $(BIN_DIR):$(JAVAFX_JARS) $(SIMULATION_CLASS)
-
-# Regla para ejecutar el servicio API
-run-api: compile-api
-	@echo "Ejecutando $(API_SERVICE_CLASS) - Servidor HTTP API..."
-	java -cp $(BIN_DIR) $(API_SERVICE_CLASS)
+run-simulation: compile
+	@echo "Ejecutando $(SIMULATION_CLASS)..."
+	java -cp $(BIN_DIR) $(SIMULATION_CLASS)
 
 # Regla para ejecutar el servicio API en un puerto específico
-run-api-port: compile-api
+run-api: compile
 	@echo "Ejecutando $(API_SERVICE_CLASS) en puerto $(PORT)..."
 	java -cp $(BIN_DIR) $(API_SERVICE_CLASS) $(PORT)
 
@@ -68,4 +50,4 @@ clean:
 	@rm -rf $(BIN_DIR)
 	@echo "Limpieza finalizada."
 
-.PHONY: all compile-all compile-fx compile-api run run-simulation run-api run-api-port clean
+.PHONY: all compile run run-simulation run-api clean

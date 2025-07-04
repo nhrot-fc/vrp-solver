@@ -131,9 +131,7 @@ public class Action {
 
             case SERVE:
                 vehicle.setStatus(VehicleStatus.SERVING);
-                if (actionCompleted && vehicle.canDispenseGLP(Math.abs(glpChangeM3)) && order != null) {
-                    vehicle.serveOrder(order, Math.abs(glpChangeM3), currentTime);
-                }
+                vehicle.serveOrder(order, glpChangeM3, currentTime);
                 break;
 
             case MAINTENANCE:

@@ -5,19 +5,10 @@ import com.vroute.assignation.Solution;
 import com.vroute.models.*;
 import com.vroute.operation.VehiclePlan;
 import com.vroute.operation.VehiclePlanCreator;
-import com.vroute.ui.MapRenderer;
-import javafx.application.Application;
-import javafx.geometry.Insets;
-import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Pane;
-import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
+import com.vroute.ui.SwingMapRenderer;
 
+import javax.swing.*;
+import java.awt.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-public class Main extends Application {
+public class Main extends JFrame {
 
     private static final int GRID_WIDTH = 70;
     private static final int GRID_HEIGHT = 50;
@@ -33,68 +24,74 @@ public class Main extends Application {
 
     private Environment environment;
     private Map<Vehicle, VehiclePlan> vehiclePlans;
-    private Pane mapPane;
-    private VBox planDetailsBox;
+    private JPanel mapPanel;
+    private JPanel planDetailsPanel;
 
     public static void main(String[] args) {
-        launch(args);
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // UIManager.setLookAndFeel(UIManager.getSystemLookAndFeel());
+            } catch (Exception e) {
+                // Use default look and feel
+            }
+            
+            Main app = new Main();
+            app.setVisible(true);
+        });
     }
 
-    @Override
-    public void start(Stage primaryStage) {
+    public Main() {
         // set up the time to 01-01-2025 00:00:00
         LocalDateTime simulationStartTime = LocalDateTime.of(2025, 1, 1, 0, 0, 0);
         initializeSimulationEnvironment(simulationStartTime);
 
         // Create UI components
-        BorderPane root = new BorderPane();
-
-        // Map area
-        mapPane = new Pane();
-        mapPane.setPrefSize(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE);
-        ScrollPane mapScrollPane = new ScrollPane(mapPane);
-        mapScrollPane.setPrefViewportHeight(720);
-        mapScrollPane.setPrefViewportWidth(1080);
-
-        // Sidebar for plan details
-        planDetailsBox = new VBox(10);
-        planDetailsBox.setPadding(new Insets(10));
-        planDetailsBox.setPrefWidth(300);
-        ScrollPane detailsScrollPane = new ScrollPane(planDetailsBox);
-
-        // Button controls
-        HBox controlsBox = new HBox(10);
-        controlsBox.setPadding(new Insets(10));
-        Button runButton = new Button("Run Assignation");
-        runButton.setOnAction(e -> runAssignation());
-        controlsBox.getChildren().add(runButton);
-
-        // Assemble layout
-        root.setCenter(mapScrollPane);
-        root.setRight(detailsScrollPane);
-        root.setBottom(controlsBox);
+        createUI();
 
         // Initial draw of environment
         drawEnvironment();
+    }
 
-        // Configure and show the stage
-        Scene scene = new Scene(root, 1100, 700);
-        primaryStage.setTitle("V-Route Delivery Planning System");
-        primaryStage.setScene(scene);
-        primaryStage.show();
+    private void createUI() {
+        setTitle("V-Route Delivery Planning System");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(1100, 700);
+        setLocationRelativeTo(null);
+        setLayout(new BorderLayout());
+
+        // Map area
+        mapPanel = new MapPanel();
+        mapPanel.setPreferredSize(new Dimension(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE));
+        JScrollPane mapScrollPane = new JScrollPane(mapPanel);
+        mapScrollPane.setPreferredSize(new Dimension(1080, 720));
+        add(mapScrollPane, BorderLayout.CENTER);
+
+        // Sidebar for plan details
+        planDetailsPanel = new JPanel();
+        planDetailsPanel.setLayout(new BoxLayout(planDetailsPanel, BoxLayout.Y_AXIS));
+        planDetailsPanel.setPreferredSize(new Dimension(300, 0));
+        JScrollPane detailsScrollPane = new JScrollPane(planDetailsPanel);
+        add(detailsScrollPane, BorderLayout.EAST);
+
+        // Button controls
+        JPanel controlsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton runButton = new JButton("Run Assignation");
+        runButton.addActionListener(e -> runAssignation());
+        controlsPanel.add(runButton);
+        add(controlsPanel, BorderLayout.SOUTH);
     }
 
     private void runAssignation() {
         // Clear previous plans
         vehiclePlans = new HashMap<>();
-        planDetailsBox.getChildren().clear();
+        planDetailsPanel.removeAll();
 
         MetaheuristicAssignator assignator = new MetaheuristicAssignator(environment);
 
         // Get solution
         Solution solution = assignator.solve(environment);
-        planDetailsBox.getChildren().add(new Label("Solution Summary:"));
-        planDetailsBox.getChildren().add(new Label(solution.toString()));
+        planDetailsPanel.add(new JLabel("Solution Summary:"));
+        planDetailsPanel.add(new JLabel(solution.toString()));
 
         solution.getVehicleOrderAssignments().forEach((vehicle, instructions) -> {
             if (!instructions.isEmpty()) {
@@ -103,46 +100,64 @@ public class Main extends Application {
                     vehiclePlans.put(vehicle, plan);
                     System.out.println(plan);
                     // Add plan details to sidebar
-                    Label vehicleLabel = new Label("Plan for " + vehicle.getId() + ":");
-                    planDetailsBox.getChildren().addAll(
-                            vehicleLabel,
-                            new Label(String.format("  Distance: %.2f km", plan.getTotalDistanceKm())),
-                            new Label(String.format("  GLP Delivered: %.2f m³", plan.getTotalGlpDeliveredM3())),
-                            new Label(String.format("  Fuel Used: %.2f gal", plan.getTotalFuelConsumedGal())),
-                            new Label("  Orders: " + plan.getServedOrders().size()));
+                    JLabel vehicleLabel = new JLabel("Plan for " + vehicle.getId() + ":");
+                    planDetailsPanel.add(vehicleLabel);
+                    planDetailsPanel.add(new JLabel(String.format("  Distance: %.2f km", plan.getTotalDistanceKm())));
+                    planDetailsPanel.add(new JLabel(String.format("  GLP Delivered: %.2f m³", plan.getTotalGlpDeliveredM3())));
+                    planDetailsPanel.add(new JLabel(String.format("  Fuel Used: %.2f gal", plan.getTotalFuelConsumedGal())));
+                    planDetailsPanel.add(new JLabel("  Orders: " + plan.getServedOrders().size()));
                 }
             }
         });
 
         // Redraw the map with the plans
         drawEnvironmentWithPlans();
+        planDetailsPanel.revalidate();
+        planDetailsPanel.repaint();
     }
 
     private void drawEnvironment() {
-        mapPane.getChildren().clear();
-
-        // Draw the grid
-        MapRenderer.drawGrid(mapPane, GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
-
-        // Draw depots
-        MapRenderer.drawDepots(mapPane, environment.getAuxDepots(), environment.getMainDepot(), CELL_SIZE);
-
-        // Draw vehicles
-        MapRenderer.drawVehicles(mapPane, environment.getAvailableVehicles(), CELL_SIZE);
-
-        // Draw orders
-        MapRenderer.drawOrders(mapPane, environment.getPendingOrders(), environment, CELL_SIZE);
-
-        // Draw blockages
-        MapRenderer.drawBlockages(mapPane, environment, environment.getCurrentTime(), CELL_SIZE);
+        if (mapPanel != null) {
+            mapPanel.repaint();
+        }
     }
 
     private void drawEnvironmentWithPlans() {
         drawEnvironment();
+    }
 
-        // Draw each vehicle's plan
-        for (VehiclePlan plan : vehiclePlans.values()) {
-            MapRenderer.drawVehiclePlan(mapPane, plan, CELL_SIZE);
+    // Custom JPanel for rendering the map
+    private class MapPanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2d = (Graphics2D) g;
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Get the current simulation time
+            LocalDateTime currentTime = environment.getCurrentTime();
+
+            // Draw the grid
+            SwingMapRenderer.drawGrid(g2d, GRID_WIDTH, GRID_HEIGHT, CELL_SIZE);
+
+            // Draw depots
+            SwingMapRenderer.drawDepots(g2d, environment.getAuxDepots(), environment.getMainDepot(), CELL_SIZE);
+
+            // Draw vehicles
+            SwingMapRenderer.drawVehicles(g2d, environment.getAvailableVehicles(), CELL_SIZE);
+
+            // Draw orders
+            SwingMapRenderer.drawOrders(g2d, environment.getPendingOrders(), environment, CELL_SIZE);
+
+            // Draw blockages
+            SwingMapRenderer.drawBlockages(g2d, environment, currentTime, CELL_SIZE);
+
+            // Draw vehicle plans if available
+            if (vehiclePlans != null) {
+                for (VehiclePlan plan : vehiclePlans.values()) {
+                    SwingMapRenderer.drawVehiclePlan(g2d, plan, CELL_SIZE);
+                }
+            }
         }
     }
 

@@ -15,10 +15,10 @@ public class Constants {
 
     // Tiempos en minutos
     public static final int GLP_SERVE_DURATION_MINUTES = 15;
-    public static final int REFUEL_DURATION_MINUTES = 10;
+    public static final int REFUEL_DURATION_MINUTES = 1;
     public static final int VEHICLE_GLP_TRANSFER_DURATION_MINUTES = 15;
-    public static final int DEPOT_GLP_TRANSFER_TIME_MINUTES = 10;
-    public static final int ROUTINE_MAINTENANCE_MINUTES = 15;
+    public static final int DEPOT_GLP_TRANSFER_TIME_MINUTES = 1;
+    public static final int ROUTINE_MAINTENANCE_MINUTES = 5;
 
     /*
      * =============================================

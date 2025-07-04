@@ -147,7 +147,7 @@ public class Orchestrator {
             case BLOCKAGE_END:
                 // The environment should handle removing expired blockages
                 logger.info("Blockage ended with ID: " + event.getEntityId());
-                needsReplanning = true;
+                needsReplanning = false;
                 break;
 
             case VEHICLE_BREAKDOWN:
