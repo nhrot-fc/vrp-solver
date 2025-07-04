@@ -151,8 +151,35 @@ public class Environment {
     }
 
     public void advanceTime(int minutes) {
+        LocalDateTime previousTime = this.currentTime;
         this.currentTime = this.currentTime.plusMinutes(minutes);
+        
+        // Check if we've crossed into a new day (00:00)
+        if (hasNewDayStarted(previousTime, this.currentTime)) {
+            handleNewDayStarted();
+        }
+        
         updateEnvironmentState();
+    }
+    
+    private boolean hasNewDayStarted(LocalDateTime previousTime, LocalDateTime currentTime) {
+        // Check if we've crossed midnight (new day started)
+        return !previousTime.toLocalDate().equals(currentTime.toLocalDate()) && 
+               currentTime.getHour() == 0 && currentTime.getMinute() == 0;
+    }
+    
+    private void handleNewDayStarted() {
+        // Actions to perform when a new day starts at 00:00
+        System.out.println("🌅 New day started at: " + currentTime.toLocalDate());
+        
+        // Refill all depots at the start of a new day
+        mainDepot.refillGLP();
+        for (Depot depot : auxDepots) {
+            depot.refillGLP();
+        }
+        
+        // Reset daily statistics or perform other daily tasks
+        // You can add more daily reset logic here as needed
     }
 
     private void updateEnvironmentState() {
@@ -180,10 +207,6 @@ public class Environment {
                     vehicle.getStatus() != VehicleStatus.UNAVAILABLE) {
                 vehicle.setStatus(VehicleStatus.AVAILABLE);
             }
-        }
-
-        for (Depot depot : auxDepots) {
-            depot.refillGLP();
         }
 
         // remove delivered orders
