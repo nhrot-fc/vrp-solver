@@ -15,7 +15,7 @@ public class Environment {
     private final List<Order> orderQueue;
     private final List<Blockage> activeBlockages;
     private final List<Incident> incidentRegistry;
-    private final List<MaintenanceTask> maintenanceTasks;
+    private final List<Maintenance> maintenanceTasks;
 
     public Environment(List<Vehicle> vehicles, Depot mainDepot, List<Depot> auxDepots,
             LocalDateTime referenceDateTime) {
@@ -53,7 +53,7 @@ public class Environment {
         return Collections.unmodifiableList(incidentRegistry);
     }
 
-    public List<MaintenanceTask> getMaintenanceTasks() {
+    public List<Maintenance> getMaintenanceTasks() {
         return Collections.unmodifiableList(maintenanceTasks);
     }
 
@@ -124,16 +124,16 @@ public class Environment {
                 .collect(Collectors.toList());
     }
 
-    public void addMaintenanceTask(MaintenanceTask task) {
+    public void addMaintenanceTask(Maintenance task) {
         maintenanceTasks.add(task);
     }
 
-    public void addMaintenanceTasks(List<MaintenanceTask> tasks) {
+    public void addMaintenanceTasks(List<Maintenance> tasks) {
         maintenanceTasks.addAll(tasks);
     }
 
     public boolean hasScheduledMaintenance(String vehicleId, LocalDateTime dateTime) {
-        for (MaintenanceTask task : maintenanceTasks) {
+        for (Maintenance task : maintenanceTasks) {
             if (task.getVehicleId().equals(vehicleId) && task.isActiveAt(dateTime)) {
                 return true;
             }
@@ -141,8 +141,8 @@ public class Environment {
         return false;
     }
 
-    public MaintenanceTask getMaintenanceTaskForVehicle(String vehicleId, LocalDateTime dateTime) {
-        for (MaintenanceTask task : maintenanceTasks) {
+    public Maintenance getMaintenanceTaskForVehicle(String vehicleId, LocalDateTime dateTime) {
+        for (Maintenance task : maintenanceTasks) {
             if (task.getVehicleId().equals(vehicleId) && task.isActiveAt(dateTime)) {
                 return task;
             }
@@ -323,7 +323,7 @@ public class Environment {
 
         int todayMaintenanceCount = 0;
         sb.append("\n📋 Today's Maintenance Tasks:");
-        for (MaintenanceTask task : maintenanceTasks) {
+        for (Maintenance task : maintenanceTasks) {
             if (task.isActiveAt(currentTime)) {
                 sb.append("\n  ").append(task);
                 todayMaintenanceCount++;

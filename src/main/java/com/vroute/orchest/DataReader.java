@@ -5,7 +5,7 @@ import com.vroute.models.Vehicle;
 import com.vroute.models.VehicleType;
 import com.vroute.models.Position;
 import com.vroute.models.Blockage;
-import com.vroute.models.MaintenanceTask;
+import com.vroute.models.Maintenance;
 import com.vroute.models.Incident;
 import com.vroute.models.IncidentType;
 import com.vroute.models.Shift;
@@ -190,8 +190,8 @@ public class DataReader {
      * @param maxTasks Maximum number of tasks to load (0 for unlimited)
      * @return List of MaintenanceTask objects
      */
-    public List<MaintenanceTask> loadMaintenanceSchedule(String filePath, LocalDateTime startDate, int durationDays, int maxTasks) {
-        List<MaintenanceTask> tasks = new ArrayList<>();
+    public List<Maintenance> loadMaintenanceSchedule(String filePath, LocalDateTime startDate, int durationDays, int maxTasks) {
+        List<Maintenance> tasks = new ArrayList<>();
         // Pattern: aaaammdd:TTNN
         // Example: 20250401:TA01
         Pattern maintenancePattern = Pattern.compile("(\\d{8}):(\\w{4})");
@@ -216,7 +216,7 @@ public class DataReader {
                         if (!maintenanceDateTime.isBefore(startDate) && 
                             (durationDays <= 0 || maintenanceDateTime.isBefore(startDate.plusDays(durationDays)))) {
                             
-                            tasks.add(new MaintenanceTask(vehicleId, maintenanceDate));
+                            tasks.add(new Maintenance(vehicleId, maintenanceDate));
                             
                             if (maxTasks > 0) {
                                 tasksLoaded++;

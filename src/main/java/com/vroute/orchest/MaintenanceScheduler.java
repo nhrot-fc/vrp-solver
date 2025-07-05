@@ -1,7 +1,7 @@
 package com.vroute.orchest;
 
 import com.vroute.models.Environment;
-import com.vroute.models.MaintenanceTask;
+import com.vroute.models.Maintenance;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -19,7 +19,7 @@ public class MaintenanceScheduler {
     private static final Logger logger = Logger.getLogger(MaintenanceScheduler.class.getName());
 
     public static int loadMaintenanceSchedule(String filePath, Environment environment, LocalDate referenceDate) {
-        List<MaintenanceTask> tasks = loadMaintenanceTasksFromFile(filePath);
+        List<Maintenance> tasks = loadMaintenanceTasksFromFile(filePath);
 
         if (tasks.isEmpty()) {
             logger.warning("No maintenance tasks were loaded from " + filePath);
@@ -27,14 +27,14 @@ public class MaintenanceScheduler {
         }
 
         int addedTasks = 0;
-        for (MaintenanceTask task : tasks) {
+        for (Maintenance task : tasks) {
             if (task.getStartTime().isAfter(environment.getCurrentTime())) {
                 environment.addMaintenanceTask(task);
                 addedTasks++;
             }
 
             LocalDateTime maxDate = environment.getCurrentTime().plusYears(1);
-            MaintenanceTask nextTask = task;
+            Maintenance nextTask = task;
             for (int i = 0; i < 6; i++) {
                 nextTask = nextTask.createNextTask();
 
@@ -54,8 +54,8 @@ public class MaintenanceScheduler {
     }
 
 
-    public static List<MaintenanceTask> loadMaintenanceTasksFromFile(String filePath) {
-        List<MaintenanceTask> tasks = new ArrayList<>();
+    public static List<Maintenance> loadMaintenanceTasksFromFile(String filePath) {
+        List<Maintenance> tasks = new ArrayList<>();
         Path path = Paths.get(filePath);
 
         if (!Files.exists(path)) {
@@ -75,7 +75,7 @@ public class MaintenanceScheduler {
                     continue;
                 }
 
-                MaintenanceTask task = MaintenanceTask.fromString(line);
+                Maintenance task = Maintenance.fromString(line);
                 if (task != null) {
                     tasks.add(task);
                 } else {

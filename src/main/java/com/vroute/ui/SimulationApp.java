@@ -233,12 +233,12 @@ public class SimulationApp extends JFrame {
             // Load maintenance tasks
             File maintenanceFile = dataPath.resolve("mantpreventivo.txt").toFile();
             if (maintenanceFile.exists()) {
-                List<MaintenanceTask> tasks = dataReader.loadMaintenanceSchedule(maintenanceFile.getPath(), startTime,
+                List<Maintenance> tasks = dataReader.loadMaintenanceSchedule(maintenanceFile.getPath(), startTime,
                         30, 0);
                 List<Event> maintenanceEvents = new ArrayList<>();
                 
                 // Create MAINTENANCE_START and MAINTENANCE_END events for each task
-                for (MaintenanceTask task : tasks) {
+                for (Maintenance task : tasks) {
                     // Using vehicleId directly as the entity ID for maintenance events
                     
                     Event startEvent = new Event(EventType.MAINTENANCE_START, task.getStartTime(), task.getVehicleId(), task);

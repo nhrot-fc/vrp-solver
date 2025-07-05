@@ -26,8 +26,8 @@ public class Constants {
      * =============================================
      */
     // City Configuration
-    public static final int CITY_LENGTH_X = 70; // Km
-    public static final int CITY_WIDTH_Y = 50; // Km
+    public static final int CITY_X = 70; // Km
+    public static final int CITY_Y = 50; // Km
     public static final int NODE_DISTANCE = 1; // Km
 
     // Storage Locations

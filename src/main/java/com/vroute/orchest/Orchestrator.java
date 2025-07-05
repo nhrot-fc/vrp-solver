@@ -172,7 +172,7 @@ public class Orchestrator {
 
             case MAINTENANCE_START:
                 if (event.getEntityId() != null && event.getData() != null) {
-                    MaintenanceTask task = event.getData();
+                    Maintenance task = event.getData();
                     environment.addMaintenanceTask(task);
                     
                     // Update vehicle status to MAINTENANCE

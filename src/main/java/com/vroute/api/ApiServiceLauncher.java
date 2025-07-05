@@ -196,11 +196,11 @@ public class ApiServiceLauncher {
             // Load maintenance tasks
             File maintenanceFile = dataPath.resolve("mantpreventivo.txt").toFile();
             if (maintenanceFile.exists()) {
-                List<MaintenanceTask> tasks = dataReader.loadMaintenanceSchedule(maintenanceFile.getPath(), startTime, 30, 10);
+                List<Maintenance> tasks = dataReader.loadMaintenanceSchedule(maintenanceFile.getPath(), startTime, 30, 10);
                 List<Event> maintenanceEvents = new ArrayList<>();
                 
                 // Create MAINTENANCE_START and MAINTENANCE_END events for each task
-                for (MaintenanceTask task : tasks) {
+                for (Maintenance task : tasks) {
                     // Using vehicleId directly as the entity ID for maintenance events
                     Event startEvent = new Event(EventType.MAINTENANCE_START, task.getStartTime(), task.getVehicleId(), task);
                     Event endEvent = new Event(EventType.MAINTENANCE_END, task.getEndTime(), task.getVehicleId(), null);

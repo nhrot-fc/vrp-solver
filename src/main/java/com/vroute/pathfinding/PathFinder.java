@@ -43,8 +43,8 @@ public class PathFinder {
                 int newX = current.posicion.getX() + dir[0];
                 int newY = current.posicion.getY() + dir[1];
 
-                if (newX < 0 || newX >= Constants.CITY_LENGTH_X ||
-                        newY < 0 || newY >= Constants.CITY_WIDTH_Y) {
+                if (newX < 0 || newX >= Constants.CITY_X ||
+                        newY < 0 || newY >= Constants.CITY_Y) {
                     continue;
                 }
 
